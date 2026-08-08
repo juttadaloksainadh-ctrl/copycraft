@@ -1,0 +1,114 @@
+/**
+ * CopyCraft Database Configuration
+ * ---------------------------------
+ * Supports both:
+ *   1. In-memory store (dbStore.js) — for development/demo mode
+ *   2. MongoDB connection — for production
+ *
+ * Controlled by MONGODB_URI in .env
+ * If MONGODB_URI is set and not empty, MongoDB is used.
+ * Otherwise, falls back to in-memory dbStore.
+ */
+
+import { db as inMemoryDb } from '../models/dbStore.js';
+
+// Database state
+let isMongoConnected = false;
+let mongoClient = null;
+let mongoDb = null;
+
+/**
+ * Initialize the database connection.
+ * Call this once at server startup.
+ */
+export async function initDatabase() {
+  const mongoUri = process.env.MONGODB_URI;
+
+  // If no URI or explicitly set to in-memory mode
+  if (!mongoUri || mongoUri.trim() === '' || process.env.DB_MODE === 'memory') {
+    console.log('📦 Database Mode: In-Memory Store (demo mode)');
+    console.log('   → Data will reset on server restart');
+    console.log('   → Set MONGODB_URI in .env to connect to MongoDB');
+    return { mode: 'memory', db: inMemoryDb };
+  }
+
+  // Attempt MongoDB connection
+  try {
+    // Dynamic import so mongodb isn't required for in-memory mode
+    const { MongoClient } = await import('mongodb');
+
+    console.log('🔄 Connecting to MongoDB...');
+    mongoClient = new MongoClient(mongoUri, {
+      maxPoolSize: 10,
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000,
+    });
+
+    await mongoClient.connect();
+    mongoDb = mongoClient.db(process.env.DB_NAME || 'copycraft_db');
+
+    // Verify connection with a ping
+    await mongoDb.command({ ping: 1 });
+    isMongoConnected = true;
+
+    console.log('✅ MongoDB Connected Successfully');
+    console.log(`   → Database: ${mongoDb.databaseName}`);
+    console.log(`   → Host: ${mongoUri.includes('@') ? mongoUri.split('@')[1].split('/')[0] : 'localhost'}`);
+
+    // Seed default collections if empty
+    await seedCollections(mongoDb);
+
+    return { mode: 'mongodb', db: mongoDb, client: mongoClient };
+  } catch (err) {
+    console.error('❌ MongoDB Connection Failed:', err.message);
+    console.log('📦 Falling back to In-Memory Store (demo mode)');
+    isMongoConnected = false;
+    return { mode: 'memory', db: inMemoryDb };
+  }
+}
+
+/**
+ * Get the active database reference.
+ * Returns either the MongoDB database or the in-memory store.
+ */
+export function getDb() {
+  if (isMongoConnected && mongoDb) {
+    return { mode: 'mongodb', db: mongoDb };
+  }
+  return { mode: 'memory', db: inMemoryDb };
+}
+
+/**
+ * Check if MongoDB is the active database.
+ */
+export function isUsingMongo() {
+  return isMongoConnected;
+}
+
+/**
+ * Graceful shutdown — close MongoDB connection.
+ */
+export async function closeDatabase() {
+  if (mongoClient) {
+    await mongoClient.close();
+    console.log('🔌 MongoDB connection closed');
+  }
+}
+
+/**
+ * Seed MongoDB collections with default data if they are empty.
+ * This ensures the app works immediately after first MongoDB setup.
+ */
+async function seedCollections(db) {
+  const collections = ['users', 'orders', 'colleges', 'coupons', 'notifications', 'auditLogs', 'supportTickets'];
+
+  for (const collName of collections) {
+    const collection = db.collection(collName);
+    const count = await collection.countDocuments();
+
+    if (count === 0 && inMemoryDb[collName] && inMemoryDb[collName].length > 0) {
+      await collection.insertMany(inMemoryDb[collName]);
+      console.log(`   → Seeded ${collName}: ${inMemoryDb[collName].length} records`);
+    }
+  }
+}
