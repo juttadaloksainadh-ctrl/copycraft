@@ -48,15 +48,19 @@ export const updateOrderStatus = (req, res) => {
   return res.json({ success: true, message: `Status updated to ${status}`, order });
 };
 
-export const verifyDeliveryOtp = (req, res) => {
+export const verifyDeliveryPin = (req, res) => {
   const { id } = req.params;
-  const { otp } = req.body;
+  const { pin } = req.body;
 
   const order = db.orders.find(o => o.id === id);
   if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
 
-  if (order.otp !== otp) {
-    return res.status(400).json({ success: false, message: 'Invalid OTP code. Please ask customer for correct 4-digit code.' });
+  // Look up the customer's permanent delivery PIN
+  const customer = db.users.find(u => u.id === order.customerId);
+  if (!customer) return res.status(404).json({ success: false, message: 'Customer record not found' });
+
+  if (customer.deliveryPin !== pin) {
+    return res.status(400).json({ success: false, message: 'Invalid delivery PIN. Please ask the customer for their 6-digit delivery PIN.' });
   }
 
   order.orderStatus = 'DELIVERED';
@@ -64,19 +68,19 @@ export const verifyDeliveryOtp = (req, res) => {
   order.timeline.push({
     status: 'DELIVERED',
     time: new Date().toISOString(),
-    note: `Delivered and verified via OTP ${otp} by ${req.user.name}`
+    note: `Delivered and verified via delivery PIN by ${req.user.name}`
   });
 
   db.auditLogs.unshift({
     id: `log_${Date.now()}`,
     userId: req.user.id,
     userName: req.user.name,
-    action: 'OTP_VERIFICATION_SUCCESS',
-    details: `Verified OTP ${otp} for order ${order.id}`,
+    action: 'DELIVERY_PIN_VERIFIED',
+    details: `Verified delivery PIN for order ${order.id} (customer: ${customer.name})`,
     timestamp: new Date().toISOString()
   });
 
-  return res.json({ success: true, message: 'OTP verified! Order successfully delivered.', order });
+  return res.json({ success: true, message: 'Delivery PIN verified! Order successfully delivered.', order });
 };
 
 export const updateInventoryItem = (req, res) => {

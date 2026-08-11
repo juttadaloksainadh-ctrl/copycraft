@@ -663,7 +663,7 @@ export default function AdminDashboard() {
             </div>
 
             <div className="input-group">
-              <label className="input-label">Contact Number (For Login OTP verification)</label>
+              <label className="input-label">Contact Number</label>
               <input
                 type="text"
                 required

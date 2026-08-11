@@ -131,8 +131,6 @@ export const createOrder = (req, res) => {
     referralDiscount
   });
 
-  // Generate 4-digit OTP for delivery verification
-  const otp = Math.floor(1000 + Math.random() * 9000).toString();
   const orderId = `ORD-2026-${Math.floor(1000 + Math.random() * 9000)}`;
 
   const newOrder = {
@@ -156,12 +154,11 @@ export const createOrder = (req, res) => {
     paymentStatus: paymentMethod === 'COD' ? 'PENDING' : 'PAID',
     paymentMethod,
     orderStatus: 'CREATED',
-    otp,
     timeline: [
       {
         status: 'CREATED',
         time: new Date().toISOString(),
-        note: `Order placed via ${paymentMethod}. OTP generated: ${otp}`
+        note: `Order placed via ${paymentMethod}`
       }
     ],
     createdAt: new Date().toISOString()

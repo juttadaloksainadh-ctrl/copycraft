@@ -15,6 +15,7 @@ export const db = {
       role: 'admin',
       collegeId: 'clg_1',
       referralCode: 'ADMINVIP',
+      deliveryPin: '910001',
       createdAt: '2026-01-10T10:00:00Z'
     },
     {
@@ -26,6 +27,7 @@ export const db = {
       role: 'super_admin',
       collegeId: 'clg_1',
       referralCode: 'SUPER100',
+      deliveryPin: '910002',
       createdAt: '2026-01-01T08:00:00Z'
     },
     {
@@ -37,6 +39,7 @@ export const db = {
       role: 'distributor',
       collegeId: 'clg_1',
       referralCode: 'DIST100',
+      deliveryPin: '910003',
       createdAt: '2026-01-15T09:30:00Z'
     },
     {
@@ -49,6 +52,7 @@ export const db = {
       collegeId: 'clg_1',
       distributorId: 'usr_distributor_1',
       referralCode: 'DEALER1',
+      deliveryPin: '910004',
       createdAt: '2026-01-20T11:15:00Z'
     },
     {
@@ -61,6 +65,7 @@ export const db = {
       collegeId: 'clg_1',
       roomDetails: 'Hostel 4, Room 302',
       referralCode: 'ANANYA20',
+      deliveryPin: '482901',
       walletBalance: 150,
       createdAt: '2026-02-01T14:20:00Z'
     }
@@ -136,7 +141,7 @@ export const db = {
       paymentStatus: 'PAID', // 'PENDING' | 'PAID' | 'FAILED'
       paymentMethod: 'UPI',
       orderStatus: 'OUT_FOR_DELIVERY', // 'CREATED' | 'ASSIGNED' | 'PRINTING' | 'PRINTED' | 'PACKAGING' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'CANCELLED'
-      otp: '4829',
+      // Delivery verification uses customer's permanent deliveryPin
       timeline: [
         { status: 'CREATED', time: '2026-08-06T09:15:00Z', note: 'Order placed successfully via UPI' },
         { status: 'ASSIGNED', time: '2026-08-06T09:20:00Z', note: 'Assigned to Suresh Print Hub' },
@@ -185,12 +190,12 @@ export const db = {
       paymentStatus: 'PAID',
       paymentMethod: 'RAZORPAY_CARDS',
       orderStatus: 'DELIVERED',
-      otp: '7193',
+      // Delivery verification uses customer's permanent deliveryPin
       timeline: [
         { status: 'CREATED', time: '2026-08-05T14:10:00Z', note: 'Order placed successfully' },
         { status: 'ASSIGNED', time: '2026-08-05T14:12:00Z', note: 'Auto assigned' },
         { status: 'PRINTING', time: '2026-08-05T14:25:00Z', note: 'Colour printing finished' },
-        { status: 'DELIVERED', time: '2026-08-05T15:00:00Z', note: 'Delivered and verified via OTP 7193' }
+        { status: 'DELIVERED', time: '2026-08-05T15:00:00Z', note: 'Delivered and verified via delivery PIN' }
       ],
       createdAt: '2026-08-05T14:10:00Z'
     }

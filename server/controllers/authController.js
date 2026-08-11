@@ -3,10 +3,6 @@ import { generateToken } from '../config/jwt.js';
 import { db } from '../models/dbStore.js';
 import { createUserProfile, getUserProfile, updateUserProfile } from '../models/userProfile.js';
 
-// Memory store for active OTP verification sessions
-const registrationSessions = new Map();
-const loginSessions = new Map();
-
 // Helper to log intrusion alerts to Admin audit log
 function reportSecurityAlert(portalName, email, reason, details = '') {
   db.auditLogs.unshift({
@@ -20,42 +16,35 @@ function reportSecurityAlert(portalName, email, reason, details = '') {
   });
 }
 
-// Phase 1: Customer Registration OTP Request
-export const requestRegistrationOtp = (req, res) => {
-  const { name, phone } = req.body;
-  if (!name || !phone) {
-    return res.status(400).json({ success: false, message: 'Name and Phone number are required' });
-  }
+/**
+ * Generate a unique 6-digit delivery PIN.
+ * Ensures no two users share the same PIN.
+ */
+function generateUniqueDeliveryPin() {
+  const existingPins = new Set(db.users.map(u => u.deliveryPin).filter(Boolean));
+  let pin;
+  let attempts = 0;
+  do {
+    pin = Math.floor(100000 + Math.random() * 900000).toString();
+    attempts++;
+    if (attempts > 10000) {
+      // Extremely unlikely fallback — extend to 7 digits
+      pin = Math.floor(1000000 + Math.random() * 9000000).toString();
+    }
+  } while (existingPins.has(pin));
+  return pin;
+}
 
-  // Generate 4 digit registration OTP
-  const otp = Math.floor(1000 + Math.random() * 9000).toString();
-  const sessionId = `reg_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-
-  registrationSessions.set(sessionId, { name, phone, otp });
-  console.log(`[SMS-MOCK] Verification OTP sent to ${phone}: ${otp}`);
-
-  return res.json({
-    success: true,
-    message: `OTP sent to ${phone} (Simulated OTP: ${otp})`,
-    sessionId
-  });
-};
-
-// Phase 2: Complete Customer Registration
+/**
+ * POST /api/auth/register
+ * Single-step customer registration. No OTP required.
+ * Generates a unique 6-digit delivery PIN for the customer.
+ */
 export const register = (req, res) => {
-  const { sessionId, otp, email, password, collegeId = 'clg_1', roomDetails } = req.body;
+  const { name, phone, email, password, collegeId = 'clg_1', roomDetails } = req.body;
 
-  if (!sessionId || !otp || !email || !password) {
-    return res.status(400).json({ success: false, message: 'All registration parameters are required' });
-  }
-
-  const session = registrationSessions.get(sessionId);
-  if (!session) {
-    return res.status(400).json({ success: false, message: 'Registration session expired or invalid' });
-  }
-
-  if (session.otp !== otp) {
-    return res.status(400).json({ success: false, message: 'Invalid OTP code. Registration rejected.' });
+  if (!name || !phone || !email || !password) {
+    return res.status(400).json({ success: false, message: 'Name, phone, email and password are all required' });
   }
 
   const existingUser = db.users.find(u => u.email.toLowerCase() === email.toLowerCase());
@@ -66,31 +55,32 @@ export const register = (req, res) => {
   const saltRounds = parseInt(process.env.BCRYPT_SALT_ROUNDS || '10', 10);
   const salt = bcrypt.genSaltSync(saltRounds);
   const passwordHash = bcrypt.hashSync(password, salt);
-  const referralCode = session.name.slice(0, 4).toUpperCase() + Math.floor(100 + Math.random() * 900);
+  const referralCode = name.slice(0, 4).toUpperCase() + Math.floor(100 + Math.random() * 900);
+  const deliveryPin = generateUniqueDeliveryPin();
 
   const newUser = {
     id: `usr_${Date.now()}`,
     email,
     passwordHash,
-    name: session.name,
-    phone: session.phone,
+    name,
+    phone,
     role: 'customer',
     collegeId,
     roomDetails: roomDetails || 'Campus Building',
     referralCode,
+    deliveryPin,
     walletBalance: 50,
     createdAt: new Date().toISOString()
   };
 
   db.users.push(newUser);
-  registrationSessions.delete(sessionId);
 
   db.auditLogs.unshift({
     id: `log_${Date.now()}`,
     userId: newUser.id,
     userName: newUser.name,
     action: 'USER_REGISTER',
-    details: `Customer registered using OTP verification on ${session.phone}`,
+    details: `Customer registered with delivery PIN ${deliveryPin}`,
     timestamp: new Date().toISOString()
   });
 
@@ -113,13 +103,18 @@ export const register = (req, res) => {
     success: true,
     message: 'User registered successfully!',
     token,
-    user: userWithoutPassword
+    user: userWithoutPassword,
+    deliveryPin
   });
 };
 
-// Login API supporting Portal security enforcement & staff OTP step-up
+/**
+ * POST /api/auth/login
+ * Unified login for all portals (customer, dealer, distributor, admin).
+ * Just email + password. No OTP step.
+ */
 export const login = (req, res) => {
-  const { email, password, portal = 'customer', phone } = req.body;
+  const { email, password, portal = 'customer' } = req.body;
 
   if (!email || !password) {
     return res.status(400).json({ success: false, message: 'Email and password are required' });
@@ -167,39 +162,7 @@ export const login = (req, res) => {
     });
   }
 
-  // Staff (Dealer / Distributor) OTP Enforcement Check
-  if (['dealer', 'distributor'].includes(user.role)) {
-    if (!phone) {
-      return res.status(400).json({
-        success: false,
-        message: 'Phone number is required for staff multi-factor verification.'
-      });
-    }
-
-    if (user.phone !== phone) {
-      reportSecurityAlert(portal, email, 'PHONE_NUMBER_MISMATCH', `Provided: ${phone}, Registered: ${user.phone}`);
-      return res.status(403).json({
-        success: false,
-        message: 'Security Alert: Verification phone number does not match registered profile. Handshake refused.'
-      });
-    }
-
-    // Generate simulated OTP
-    const otp = Math.floor(1000 + Math.random() * 9000).toString();
-    const sessionId = `staff_${Date.now()}`;
-    loginSessions.set(sessionId, { userId: user.id, otp });
-
-    console.log(`[MOCK-SMS] Staff Login OTP for ${user.name}: ${otp}`);
-
-    return res.json({
-      success: true,
-      otpRequired: true,
-      sessionId,
-      message: `Verification code sent to ${phone} (Simulated OTP: ${otp})`
-    });
-  }
-
-  // Customers & Admins bypass login OTP
+  // All portals: direct login with token
   const token = generateToken({ id: user.id, role: user.role, email: user.email });
   const { passwordHash: _, ...userWithoutPassword } = user;
 
@@ -211,36 +174,19 @@ export const login = (req, res) => {
   });
 };
 
-// Staff Login OTP Verification Completion
-export const verifyStaffLoginOtp = (req, res) => {
-  const { sessionId, otp } = req.body;
-  if (!sessionId || !otp) {
-    return res.status(400).json({ success: false, message: 'Session ID and OTP are required' });
-  }
-
-  const session = loginSessions.get(sessionId);
-  if (!session) {
-    return res.status(400).json({ success: false, message: 'Verification session expired' });
-  }
-
-  if (session.otp !== otp) {
-    return res.status(400).json({ success: false, message: 'Invalid OTP code. Authentication refused.' });
-  }
-
-  const user = db.users.find(u => u.id === session.userId);
+/**
+ * GET /api/auth/delivery-pin
+ * Returns the authenticated customer's delivery verification PIN.
+ */
+export const getDeliveryPin = (req, res) => {
+  const user = db.users.find(u => u.id === req.user.id);
   if (!user) {
-    return res.status(404).json({ success: false, message: 'User record not found' });
+    return res.status(404).json({ success: false, message: 'User not found' });
   }
-
-  loginSessions.delete(sessionId);
-  const token = generateToken({ id: user.id, role: user.role, email: user.email });
-  const { passwordHash: _, ...userWithoutPassword } = user;
-
   return res.json({
     success: true,
-    message: 'Staff verification successful. Access granted.',
-    token,
-    user: userWithoutPassword
+    deliveryPin: user.deliveryPin,
+    message: 'Share this PIN with the delivery person to confirm receipt of your order.'
   });
 };
 
@@ -331,4 +277,3 @@ export const createNotification = ({ userId, type, title, message }) => {
   db.notifications.unshift(notif);
   return notif;
 };
-

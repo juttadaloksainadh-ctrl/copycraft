@@ -28,7 +28,7 @@ export default function OrderTracker({ order }) {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           <Badge status={order.orderStatus} />
-          {order.otp && (
+          {['OUT_FOR_DELIVERY'].includes(order.orderStatus) && (
             <div style={{
               background: 'var(--primary-light)',
               color: 'var(--primary)',
@@ -41,7 +41,7 @@ export default function OrderTracker({ order }) {
               gap: '0.4rem',
               border: '1px solid var(--border-focus)'
             }}>
-              <Key size={16} /> Delivery OTP: {order.otp}
+              <Key size={16} /> Use your Delivery PIN to confirm receipt
             </div>
           )}
         </div>

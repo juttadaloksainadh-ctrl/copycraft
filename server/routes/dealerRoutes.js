@@ -2,7 +2,7 @@ import express from 'express';
 import {
   getDealerQueue,
   updateOrderStatus,
-  verifyDeliveryOtp,
+  verifyDeliveryPin,
   updateInventoryItem
 } from '../controllers/dealerController.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
@@ -15,7 +15,7 @@ router.use(requireRole(['dealer', 'admin', 'super_admin']));
 
 router.get('/queue', getDealerQueue);
 router.put('/orders/:id/status', updateOrderStatus);
-router.post('/orders/:id/verify-otp', verifyDeliveryOtp);
+router.post('/orders/:id/verify-pin', verifyDeliveryPin);
 router.put('/inventory/:id', updateInventoryItem);
 
 export default router;

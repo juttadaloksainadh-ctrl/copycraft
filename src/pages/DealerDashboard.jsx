@@ -6,7 +6,7 @@ import Navbar from '../components/common/Navbar';
 import Sidebar from '../components/common/Sidebar';
 import Footer from '../components/common/Footer';
 import PrintQueueCard from '../components/dealer/PrintQueueCard';
-import OtpVerificationModal from '../components/dealer/OtpVerificationModal';
+import PinVerificationModal from '../components/dealer/PinVerificationModal';
 import Badge from '../components/common/Badge';
 import DataTable from '../components/common/DataTable';
 import ProfilePage from '../components/common/ProfilePage';
@@ -17,7 +17,7 @@ export default function DealerDashboard() {
   const { addToast } = useToast();
   const [orders, setOrders] = useState([]);
   const [inventory, setInventory] = useState([]);
-  const [selectedOrderForOtp, setSelectedOrderForOtp] = useState(null);
+  const [selectedOrderForPin, setSelectedOrderForPin] = useState(null);
   const [activeTab, setActiveTab] = useState('queue');
   const [filterStatus, setFilterStatus] = useState('ALL');
   const [loading, setLoading] = useState(true);
@@ -58,16 +58,16 @@ export default function DealerDashboard() {
     }
   };
 
-  const handleVerifyOtp = async (orderId, otp) => {
-    const res = await apiFetch(`/dealer/orders/${orderId}/verify-otp`, {
+  const handleVerifyPin = async (orderId, pin) => {
+    const res = await apiFetch(`/dealer/orders/${orderId}/verify-pin`, {
       method: 'POST',
-      body: JSON.stringify({ otp })
+      body: JSON.stringify({ pin })
     });
     if (res.success) {
-      addToast('OTP Verified! Order delivered successfully.', 'success');
+      addToast('Delivery PIN verified! Order delivered successfully.', 'success');
       fetchDealerQueue();
     } else {
-      throw new Error(res.message || 'Invalid OTP code');
+      throw new Error(res.message || 'Invalid delivery PIN');
     }
   };
 
@@ -180,7 +180,7 @@ export default function DealerDashboard() {
                       key={order.id}
                       order={order}
                       onStatusChange={handleStatusChange}
-                      onVerifyOtpClick={setSelectedOrderForOtp}
+                      onVerifyPinClick={setSelectedOrderForPin}
                     />
                   ))
                 ) : (
@@ -266,12 +266,12 @@ export default function DealerDashboard() {
           {activeTab === 'profile' && <ProfilePage />}
         </main>
 
-        {/* OTP Verification Modal */}
-        <OtpVerificationModal
-          isOpen={!!selectedOrderForOtp}
-          onClose={() => setSelectedOrderForOtp(null)}
-          order={selectedOrderForOtp}
-          onVerifySuccess={handleVerifyOtp}
+        {/* Delivery PIN Verification Modal */}
+        <PinVerificationModal
+          isOpen={!!selectedOrderForPin}
+          onClose={() => setSelectedOrderForPin(null)}
+          order={selectedOrderForPin}
+          onVerifySuccess={handleVerifyPin}
         />
 
         <Footer />

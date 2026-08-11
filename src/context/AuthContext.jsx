@@ -33,12 +33,12 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const login = async (email, password, portal = 'customer', phone = null) => {
+  const login = async (email, password, portal = 'customer') => {
     const res = await apiFetch('/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email, password, portal, phone })
+      body: JSON.stringify({ email, password, portal })
     });
-    if (res.success && !res.otpRequired) {
+    if (res.success) {
       localStorage.setItem('copycraft_token', res.token);
       setToken(res.token);
       setUser(res.user);
@@ -81,21 +81,16 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const completeStaffLogin = (authToken, authUser) => {
-    localStorage.setItem('copycraft_token', authToken);
-    setToken(authToken);
-    setUser(authUser);
-  };
-
   const refreshProfile = async () => {
     if (token) await fetchUserProfile(token);
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, register, logout, switchDemoRole, completeStaffLogin, refreshProfile }}>
+    <AuthContext.Provider value={{ user, token, loading, login, register, logout, switchDemoRole, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );
 };
 
 export const useAuth = () => useContext(AuthContext);
+

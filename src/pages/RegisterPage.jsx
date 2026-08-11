@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { apiFetch } from '../utils/api';
-import { Mail, Lock, Phone, User, ArrowRight, Key, MapPin } from 'lucide-react';
+import { Mail, Lock, Phone, User, ArrowRight, MapPin, ShieldCheck } from 'lucide-react';
 
 export default function RegisterPage({ onNavigate }) {
   const { register } = useAuth();
@@ -17,10 +17,8 @@ export default function RegisterPage({ onNavigate }) {
     collegeId: '',
     roomDetails: ''
   });
-  const [otpSent, setOtpSent] = useState(false);
-  const [otpCode, setOtpCode] = useState('');
-  const [sessionId, setSessionId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [deliveryPin, setDeliveryPin] = useState(null);
 
   useEffect(() => {
     fetchColleges();
@@ -36,45 +34,18 @@ export default function RegisterPage({ onNavigate }) {
     } catch (e) {}
   };
 
-  const handleRequestOtp = async (e) => {
+  const handleRegister = async (e) => {
     e.preventDefault();
-    if (!formData.name.trim() || !formData.phone.trim()) {
-      addToast('Please enter your name and phone number first', 'warning');
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      const res = await apiFetch('/auth/register-otp', {
-        method: 'POST',
-        body: JSON.stringify({ name: formData.name, phone: formData.phone })
-      });
-      if (res.success) {
-        addToast(res.message || 'OTP verification code sent!', 'success');
-        setSessionId(res.sessionId);
-        setOtpSent(true);
-      } else {
-        addToast(res.message, 'error');
-      }
-    } catch (err) {
-      addToast('Error sending OTP verification code', 'error');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleCompleteRegister = async (e) => {
-    e.preventDefault();
-    if (!otpCode || !formData.email || !formData.password) {
-      addToast('Please fill all credentials & OTP code', 'warning');
+    if (!formData.name || !formData.phone || !formData.email || !formData.password) {
+      addToast('Please fill in all required fields', 'warning');
       return;
     }
 
     setIsSubmitting(true);
     try {
       const res = await register({
-        sessionId,
-        otp: otpCode,
+        name: formData.name,
+        phone: formData.phone,
         email: formData.email,
         password: formData.password,
         collegeId: formData.collegeId,
@@ -82,17 +53,76 @@ export default function RegisterPage({ onNavigate }) {
       });
 
       if (res.success) {
+        setDeliveryPin(res.deliveryPin);
         addToast('Registration successful! Welcome to CopyCraft.', 'success');
-        onNavigate('dashboard');
       } else {
         addToast(res.message || 'Registration failed', 'error');
       }
     } catch (err) {
-      addToast(err.message || 'Registration verification failed', 'error');
+      addToast(err.message || 'Registration failed', 'error');
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  // If registration succeeded, show the delivery PIN
+  if (deliveryPin) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-app)', padding: '1.5rem' }}>
+        <div className="card animate-fade-in" style={{ maxWidth: '480px', width: '100%', padding: '2.5rem', textAlign: 'center' }}>
+          <div style={{
+            width: '64px',
+            height: '64px',
+            borderRadius: '50%',
+            background: 'var(--primary-light)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '0 auto 1rem auto'
+          }}>
+            <ShieldCheck size={32} color="var(--primary)" />
+          </div>
+
+          <h2 style={{ fontSize: '1.5rem', fontWeight: 800, marginBottom: '0.5rem' }}>Welcome to CopyCraft!</h2>
+          <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
+            Your account has been created. Here is your permanent delivery verification PIN:
+          </p>
+
+          <div style={{
+            background: 'var(--bg-app)',
+            border: '2px dashed var(--primary)',
+            borderRadius: 'var(--radius-lg)',
+            padding: '1.25rem',
+            marginBottom: '1.5rem'
+          }}>
+            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
+              YOUR DELIVERY PIN
+            </div>
+            <div style={{
+              fontSize: '2.5rem',
+              fontWeight: 800,
+              letterSpacing: '0.3em',
+              color: 'var(--primary)'
+            }}>
+              {deliveryPin}
+            </div>
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
+              Share this PIN with the delivery person to confirm receipt of your orders.
+            </div>
+          </div>
+
+          <button
+            className="btn btn-lg btn-primary"
+            onClick={() => onNavigate('dashboard')}
+            style={{ width: '100%', gap: '0.5rem' }}
+          >
+            Go to Dashboard
+            <ArrowRight size={18} />
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-app)', padding: '1.5rem' }}>
@@ -109,83 +139,38 @@ export default function RegisterPage({ onNavigate }) {
           </p>
         </div>
 
-        {!otpSent ? (
-          /* Step 1: Name and Phone Input */
-          <form onSubmit={handleRequestOtp} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-            <div className="input-group">
-              <label className="input-label">Full Name</label>
-              <div style={{ position: 'relative' }}>
-                <input
-                  type="text"
-                  required
-                  className="input-field"
-                  value={formData.name}
-                  onChange={e => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="e.g. Ananya Sharma"
-                />
-              </div>
-            </div>
-
-            <div className="input-group">
-              <label className="input-label">Mobile Number</label>
-              <div style={{ position: 'relative' }}>
-                <input
-                  type="tel"
-                  required
-                  className="input-field"
-                  value={formData.phone}
-                  onChange={e => setFormData({ ...formData, phone: e.target.value })}
-                  placeholder="e.g. +91 96333 44455"
-                />
-              </div>
-            </div>
-
-            <div className="input-group">
-              <label className="input-label">Select College Station</label>
-              <select
-                className="input-field"
-                value={formData.collegeId}
-                onChange={e => setFormData({ ...formData, collegeId: e.target.value })}
-              >
-                {colleges.map(c => (
-                  <option key={c.id} value={c.id}>{c.name} ({c.city})</option>
-                ))}
-              </select>
-            </div>
-
-            <button
-              type="submit"
-              className="btn btn-lg btn-primary"
-              disabled={isSubmitting}
-              style={{ width: '100%', marginTop: '0.5rem', gap: '0.5rem' }}
-            >
-              {isSubmitting ? 'Requesting OTP...' : 'Send Registration OTP'}
-              <ArrowRight size={18} />
-            </button>
-          </form>
-        ) : (
-          /* Step 2: OTP, ID, Password Creation */
-          <form onSubmit={handleCompleteRegister} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-            <div style={{ background: 'var(--primary-light)', padding: '0.75rem', borderRadius: 'var(--radius-md)', fontSize: '0.85rem', color: 'var(--primary)', textAlign: 'center', fontWeight: 600 }}>
-              Simulated verification code has been dispatched to your mobile.
-            </div>
-
-            <div className="input-group">
-              <label className="input-label">Enter Registration OTP</label>
+        <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+          <div className="input-group">
+            <label className="input-label">Full Name</label>
+            <div style={{ position: 'relative' }}>
               <input
                 type="text"
                 required
-                maxLength={4}
                 className="input-field"
-                placeholder="4-digit OTP"
-                value={otpCode}
-                onChange={e => setOtpCode(e.target.value)}
-                style={{ fontSize: '1.25rem', letterSpacing: '0.2rem', fontWeight: 700, textAlign: 'center' }}
+                value={formData.name}
+                onChange={e => setFormData({ ...formData, name: e.target.value })}
+                placeholder="e.g. Ananya Sharma"
               />
             </div>
+          </div>
 
-            <div className="input-group">
-              <label className="input-label">Create Login Email ID</label>
+          <div className="input-group">
+            <label className="input-label">Mobile Number</label>
+            <div style={{ position: 'relative' }}>
+              <input
+                type="tel"
+                required
+                className="input-field"
+                value={formData.phone}
+                onChange={e => setFormData({ ...formData, phone: e.target.value })}
+                placeholder="e.g. +91 96333 44455"
+              />
+            </div>
+          </div>
+
+          <div className="input-group">
+            <label className="input-label">Email Address</label>
+            <div style={{ position: 'relative' }}>
               <input
                 type="email"
                 required
@@ -195,9 +180,11 @@ export default function RegisterPage({ onNavigate }) {
                 placeholder="student@college.edu"
               />
             </div>
+          </div>
 
-            <div className="input-group">
-              <label className="input-label">Create Password</label>
+          <div className="input-group">
+            <label className="input-label">Create Password</label>
+            <div style={{ position: 'relative' }}>
               <input
                 type="password"
                 required
@@ -207,40 +194,42 @@ export default function RegisterPage({ onNavigate }) {
                 placeholder="••••••••"
               />
             </div>
+          </div>
 
-            <div className="input-group">
-              <label className="input-label">Hostel & Room Details</label>
-              <input
-                type="text"
-                required
-                className="input-field"
-                value={formData.roomDetails}
-                onChange={e => setFormData({ ...formData, roomDetails: e.target.value })}
-                placeholder="e.g. Hostel 4, Room 302"
-              />
-            </div>
+          <div className="input-group">
+            <label className="input-label">Select College Station</label>
+            <select
+              className="input-field"
+              value={formData.collegeId}
+              onChange={e => setFormData({ ...formData, collegeId: e.target.value })}
+            >
+              {colleges.map(c => (
+                <option key={c.id} value={c.id}>{c.name} ({c.city})</option>
+              ))}
+            </select>
+          </div>
 
-            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => setOtpSent(false)}
-                style={{ flex: 1 }}
-              >
-                Back
-              </button>
-              <button
-                type="submit"
-                className="btn btn-primary"
-                disabled={isSubmitting}
-                style={{ flex: 2, gap: '0.5rem' }}
-              >
-                {isSubmitting ? 'Creating Profile...' : 'Verify & Register'}
-                <ArrowRight size={18} />
-              </button>
-            </div>
-          </form>
-        )}
+          <div className="input-group">
+            <label className="input-label">Hostel & Room Details</label>
+            <input
+              type="text"
+              className="input-field"
+              value={formData.roomDetails}
+              onChange={e => setFormData({ ...formData, roomDetails: e.target.value })}
+              placeholder="e.g. Hostel 4, Room 302"
+            />
+          </div>
+
+          <button
+            type="submit"
+            className="btn btn-lg btn-primary"
+            disabled={isSubmitting}
+            style={{ width: '100%', marginTop: '0.5rem', gap: '0.5rem' }}
+          >
+            {isSubmitting ? 'Creating Account...' : 'Register'}
+            <ArrowRight size={18} />
+          </button>
+        </form>
 
         <div style={{ marginTop: '1.5rem', textAlign: 'center', fontSize: '0.85rem' }}>
           Already have an account?{' '}

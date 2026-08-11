@@ -1,33 +1,33 @@
 import React, { useState } from 'react';
-import { Key, CheckCircle2 } from 'lucide-react';
+import { Key, CheckCircle2, ShieldCheck } from 'lucide-react';
 import Modal from '../common/Modal';
 import { useToast } from '../../context/ToastContext';
 
-export default function OtpVerificationModal({ isOpen, onClose, order, onVerifySuccess }) {
-  const [otpInput, setOtpInput] = useState('');
+export default function PinVerificationModal({ isOpen, onClose, order, onVerifySuccess }) {
+  const [pinInput, setPinInput] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
   const { addToast } = useToast();
 
   const handleVerify = async () => {
-    if (!otpInput || otpInput.length < 4) {
-      addToast('Please enter the complete 4-digit OTP provided by customer', 'warning');
+    if (!pinInput || pinInput.length < 6) {
+      addToast('Please enter the complete 6-digit delivery PIN provided by the customer', 'warning');
       return;
     }
 
     setIsVerifying(true);
     try {
-      await onVerifySuccess(order.id, otpInput);
-      setOtpInput('');
+      await onVerifySuccess(order.id, pinInput);
+      setPinInput('');
       onClose();
     } catch (err) {
-      addToast(err.message || 'OTP verification failed', 'error');
+      addToast(err.message || 'Delivery PIN verification failed', 'error');
     } finally {
       setIsVerifying(false);
     }
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="OTP Delivery Verification" maxWidth="420px">
+    <Modal isOpen={isOpen} onClose={onClose} title="Delivery PIN Verification" maxWidth="420px">
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', textAlign: 'center' }}>
         <div style={{
           width: '56px',
@@ -39,13 +39,13 @@ export default function OtpVerificationModal({ isOpen, onClose, order, onVerifyS
           justifyContent: 'center',
           margin: '0 auto'
         }}>
-          <Key size={26} color="var(--primary)" />
+          <ShieldCheck size={26} color="var(--primary)" />
         </div>
 
         <div>
           <h4 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Order #{order?.id}</h4>
           <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
-            Verify the 4-digit confirmation code at delivery location <span style={{ fontWeight: 700 }}>{order?.deliveryLocation}</span> to complete the handover.
+            Ask the customer for their <span style={{ fontWeight: 700 }}>6-digit delivery PIN</span> at location <span style={{ fontWeight: 700 }}>{order?.deliveryLocation}</span> to confirm handover.
           </p>
         </div>
 
@@ -53,10 +53,10 @@ export default function OtpVerificationModal({ isOpen, onClose, order, onVerifyS
           <input
             type="text"
             className="input-field"
-            placeholder="Enter 4-digit OTP"
-            maxLength={4}
-            value={otpInput}
-            onChange={e => setOtpInput(e.target.value)}
+            placeholder="Enter 6-digit PIN"
+            maxLength={6}
+            value={pinInput}
+            onChange={e => setPinInput(e.target.value)}
             style={{
               fontSize: '1.75rem',
               fontWeight: 800,
@@ -74,7 +74,7 @@ export default function OtpVerificationModal({ isOpen, onClose, order, onVerifyS
           style={{ width: '100%', gap: '0.5rem', background: 'var(--success)' }}
         >
           <CheckCircle2 size={18} />
-          {isVerifying ? 'Verifying OTP...' : 'Verify OTP & Complete Delivery'}
+          {isVerifying ? 'Verifying PIN...' : 'Verify PIN & Complete Delivery'}
         </button>
       </div>
     </Modal>

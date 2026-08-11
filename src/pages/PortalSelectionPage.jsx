@@ -82,7 +82,7 @@ export default function PortalSelectionPage({ onSelectPortal }) {
     {
       id: 'dealer',
       title: 'Dealer Hub',
-      description: 'Access assigned campus print jobs, download customer documents, update print statuses, and verify order handovers using OTPs.',
+      description: 'Access assigned campus print jobs, download customer documents, update print statuses, and verify order handovers using delivery PINs.',
       icon: Printer,
       color: 'var(--success)',
       badge: 'Local Print Stations'
