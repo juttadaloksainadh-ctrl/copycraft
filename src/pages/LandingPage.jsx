@@ -174,7 +174,7 @@ export default function LandingPage({ onNavigate }) {
                 ₹{quote.breakdown.finalPrice.toFixed(2)}
               </div>
               <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
-                Includes GST (18%) + Instant Campus Classroom Delivery
+                Printing & Binding Cost (No Hidden Fees)
               </p>
               <button className="btn btn-lg btn-primary" onClick={() => onNavigate('upload')} style={{ width: '100%' }}>
                 Print This Document Now

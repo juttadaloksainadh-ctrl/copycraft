@@ -162,6 +162,11 @@ export const login = (req, res) => {
     });
   }
 
+  // Ensure user has a unique delivery PIN
+  if (!user.deliveryPin) {
+    user.deliveryPin = generateUniqueDeliveryPin();
+  }
+
   // All portals: direct login with token
   const token = generateToken({ id: user.id, role: user.role, email: user.email });
   const { passwordHash: _, ...userWithoutPassword } = user;
@@ -183,6 +188,11 @@ export const getDeliveryPin = (req, res) => {
   if (!user) {
     return res.status(404).json({ success: false, message: 'User not found' });
   }
+
+  if (!user.deliveryPin) {
+    user.deliveryPin = generateUniqueDeliveryPin();
+  }
+
   return res.json({
     success: true,
     deliveryPin: user.deliveryPin,
@@ -191,7 +201,12 @@ export const getDeliveryPin = (req, res) => {
 };
 
 export const getProfile = async (req, res) => {
-  const { passwordHash, ...userWithoutPassword } = req.user;
+  const user = db.users.find(u => u.id === req.user.id) || req.user;
+  if (!user.deliveryPin) {
+    user.deliveryPin = generateUniqueDeliveryPin();
+  }
+
+  const { passwordHash, ...userWithoutPassword } = user;
 
   // Merge with extended profile from MongoDB
   try {

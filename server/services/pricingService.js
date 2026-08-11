@@ -37,9 +37,9 @@ export const PRICING_DEFAULTS = {
     transparent: 12,
     cardboard: 18
   },
-  deliveryBaseFee: 20,
-  freeDeliveryThreshold: 300,
-  gstRate: 0.18
+  deliveryBaseFee: 0,
+  freeDeliveryThreshold: 0,
+  gstRate: 0.0
 };
 
 export function calculateOrderPrice(options) {
@@ -74,8 +74,8 @@ export function calculateOrderPrice(options) {
 
   const subtotalBeforeDelivery = totalPrintCost + totalAddonCost;
 
-  // Delivery fee calculation
-  const deliveryFee = subtotalBeforeDelivery >= PRICING_DEFAULTS.freeDeliveryThreshold ? 0 : PRICING_DEFAULTS.deliveryBaseFee;
+  // Delivery fee calculation (No delivery charge)
+  const deliveryFee = 0;
 
   // Coupon Discount calculation
   let couponDiscount = 0;
@@ -86,7 +86,7 @@ export function calculateOrderPrice(options) {
     } else if (codeUpper === 'EXAM50') {
       couponDiscount = Math.min(50, subtotalBeforeDelivery * 0.20);
     } else if (codeUpper === 'FREEDEL') {
-      couponDiscount = deliveryFee;
+      couponDiscount = 0;
     } else if (codeUpper === 'STUDENT20') {
       couponDiscount = Math.round(subtotalBeforeDelivery * 0.20);
     }
@@ -94,11 +94,11 @@ export function calculateOrderPrice(options) {
 
   const netBeforeTax = Math.max(0, subtotalBeforeDelivery - couponDiscount - referralDiscount);
 
-  // GST Calculation (18%)
-  const gstAmount = Math.round(netBeforeTax * PRICING_DEFAULTS.gstRate * 100) / 100;
+  // GST Calculation (No GST)
+  const gstAmount = 0;
 
-  // Final Total
-  const finalPrice = Math.round((netBeforeTax + deliveryFee + gstAmount) * 100) / 100;
+  // Final Total (Printing + Binding/Addons - Discounts)
+  const finalPrice = Math.round(netBeforeTax * 100) / 100;
 
   return {
     pageCount,

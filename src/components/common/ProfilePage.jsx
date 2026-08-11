@@ -5,7 +5,7 @@ import { useToast } from '../../context/ToastContext';
 import { apiFetch } from '../../utils/api';
 import {
   User, Phone, Mail, MapPin, Building2,
-  Edit3, CheckCircle, X, ShieldCheck, Calendar
+  Edit3, CheckCircle, X, ShieldCheck, Calendar, Key
 } from 'lucide-react';
 
 const ROLE_COLOR = {
@@ -241,6 +241,19 @@ export default function ProfilePage() {
               {user?.collegeId === 'clg_1' ? 'IIT Bombay' : user?.collegeId === 'clg_2' ? 'BITS Pilani' : user?.collegeId === 'clg_3' ? 'Delhi University' : user?.collegeId || 'N/A'}
             </div>
           </div>
+
+          {/* Delivery PIN – only for customers */}
+          {user?.role === 'customer' && (
+            <div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.78rem', fontWeight: 700, color: 'var(--primary)', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                <Key size={13} /> Delivery Verification PIN
+              </label>
+              <div style={{ fontWeight: 800, fontSize: '1.25rem', color: 'var(--primary)', letterSpacing: '2px', fontFamily: 'var(--font-mono)', padding: '0.2rem 0' }}>
+                {user?.deliveryPin}
+              </div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Share with delivery executive to confirm order receipt</div>
+            </div>
+          )}
 
         </div>
 

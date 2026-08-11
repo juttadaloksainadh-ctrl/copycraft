@@ -132,11 +132,11 @@ export const db = {
         printCost: 22.95,
         addonCost: 47.00,
         subtotal: 69.95,
-        deliveryFee: 20.00,
+        deliveryFee: 0.00,
         couponDiscount: 10.00,
         referralDiscount: 0,
-        gstAmount: 14.39,
-        finalPrice: 94.34
+        gstAmount: 0.00,
+        finalPrice: 59.95
       },
       paymentStatus: 'PAID', // 'PENDING' | 'PAID' | 'FAILED'
       paymentMethod: 'UPI',
@@ -184,8 +184,8 @@ export const db = {
         deliveryFee: 0.00,
         couponDiscount: 20.00,
         referralDiscount: 0,
-        gstAmount: 25.92,
-        finalPrice: 169.92
+        gstAmount: 0.00,
+        finalPrice: 144.00
       },
       paymentStatus: 'PAID',
       paymentMethod: 'RAZORPAY_CARDS',

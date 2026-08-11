@@ -32,7 +32,7 @@ export default function OrderSummary({ quote, onOrderSubmit, isSubmitting }) {
     printCost: 0,
     addonCost: 0,
     subtotal: 0,
-    deliveryFee: 20,
+    deliveryFee: 0,
     couponDiscount: 0,
     gstAmount: 0,
     finalPrice: 0
@@ -188,16 +188,6 @@ export default function OrderSummary({ quote, onOrderSubmit, isSubmitting }) {
             <span>- ₹{breakdown.couponDiscount.toFixed(2)}</span>
           </div>
         )}
-
-        <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-muted)' }}>
-          <span>Express Campus Delivery</span>
-          <span>{breakdown.deliveryFee === 0 ? <span style={{ color: 'var(--success)', fontWeight: 700 }}>FREE</span> : `₹${breakdown.deliveryFee.toFixed(2)}`}</span>
-        </div>
-
-        <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-muted)' }}>
-          <span>GST (18%)</span>
-          <span>₹{breakdown.gstAmount.toFixed(2)}</span>
-        </div>
 
         <div style={{
           display: 'flex',
