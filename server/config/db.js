@@ -10,7 +10,13 @@
  * Otherwise, falls back to in-memory dbStore.
  */
 
+import dns from 'dns';
 import { db as inMemoryDb } from '../models/dbStore.js';
+
+// Force Node.js DNS to prefer IPv4 over IPv6 for MongoDB Atlas connection reliability
+try {
+  dns.setDefaultResultOrder('ipv4first');
+} catch (e) {}
 
 // Database state
 let isMongoConnected = false;
@@ -42,6 +48,7 @@ export async function initDatabase() {
       maxPoolSize: 10,
       serverSelectionTimeoutMS: 10000,
       socketTimeoutMS: 45000,
+      family: 4,
       tls: true,
     });
 
