@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { generateToken } from '../config/jwt.js';
 import { db } from '../models/dbStore.js';
+import { createUserProfile, getUserProfile, updateUserProfile } from '../models/userProfile.js';
 
 // Memory store for active OTP verification sessions
 const registrationSessions = new Map();
@@ -91,6 +92,18 @@ export const register = (req, res) => {
     action: 'USER_REGISTER',
     details: `Customer registered using OTP verification on ${session.phone}`,
     timestamp: new Date().toISOString()
+  });
+
+  // Create extended profile in MongoDB (async, non-blocking)
+  createUserProfile(newUser.id, {
+    preferences: { theme: 'system', language: 'en' },
+    addresses: roomDetails ? [{ label: 'Default', hostel: roomDetails, room: '', landmark: '', isDefault: true }] : [],
+  }).then(profile => {
+    if (profile && !profile._fallback) {
+      console.log(`   👤 User profile created in MongoDB for ${newUser.name}`);
+    }
+  }).catch(err => {
+    console.error('   ⚠️ Failed to create user profile:', err.message);
   });
 
   const token = generateToken({ id: newUser.id, role: newUser.role, email: newUser.email });
@@ -231,20 +244,52 @@ export const verifyStaffLoginOtp = (req, res) => {
   });
 };
 
-export const getProfile = (req, res) => {
+export const getProfile = async (req, res) => {
   const { passwordHash, ...userWithoutPassword } = req.user;
+
+  // Merge with extended profile from MongoDB
+  try {
+    const extendedProfile = await getUserProfile(req.user.id);
+    if (extendedProfile) {
+      userWithoutPassword.avatarUrl = extendedProfile.avatarUrl || '';
+      userWithoutPassword.preferences = extendedProfile.preferences || {};
+      userWithoutPassword.addresses = extendedProfile.addresses || [];
+      userWithoutPassword.walletHistory = (extendedProfile.walletHistory || []).slice(0, 20);
+    }
+  } catch (err) {
+    // Profile fetch failed — return base user data
+    console.error('Profile merge error:', err.message);
+  }
+
   return res.json({ success: true, user: userWithoutPassword });
 };
 
-export const updateProfile = (req, res) => {
+export const updateProfile = async (req, res) => {
   const user = db.users.find(u => u.id === req.user.id);
   if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
-  const { name, phone, roomDetails, collegeId } = req.body;
+  const { name, phone, roomDetails, collegeId, avatarUrl, preferences, addresses } = req.body;
+
+  // Update base user fields in the main store
   if (name) user.name = name;
   if (phone) user.phone = phone;
   if (roomDetails) user.roomDetails = roomDetails;
   if (collegeId) user.collegeId = collegeId;
+
+  // Update extended profile fields in MongoDB
+  const mongoUpdates = {};
+  if (avatarUrl !== undefined) mongoUpdates.avatarUrl = avatarUrl;
+  if (preferences) mongoUpdates.preferences = preferences;
+  if (addresses) mongoUpdates.addresses = addresses;
+
+  if (Object.keys(mongoUpdates).length > 0) {
+    try {
+      await updateUserProfile(req.user.id, mongoUpdates);
+      console.log(`   👤 Extended profile updated in MongoDB for ${user.name}`);
+    } catch (err) {
+      console.error('   ⚠️ Failed to update MongoDB profile:', err.message);
+    }
+  }
 
   const { passwordHash: _, ...userWithoutPassword } = user;
   return res.json({ success: true, message: 'Profile updated', user: userWithoutPassword });

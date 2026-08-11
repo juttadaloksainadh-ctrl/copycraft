@@ -40,8 +40,9 @@ export async function initDatabase() {
     console.log('🔄 Connecting to MongoDB...');
     mongoClient = new MongoClient(mongoUri, {
       maxPoolSize: 10,
-      serverSelectionTimeoutMS: 5000,
+      serverSelectionTimeoutMS: 10000,
       socketTimeoutMS: 45000,
+      tls: true,
     });
 
     await mongoClient.connect();
@@ -79,6 +80,20 @@ export function getDb() {
 }
 
 /**
+ * Get a specific MongoDB collection by name.
+ * Returns null if MongoDB is not connected (allows graceful fallback).
+ *
+ * @param {string} collectionName - The collection name
+ * @returns {import('mongodb').Collection|null}
+ */
+export function getMongoCollection(collectionName) {
+  if (isMongoConnected && mongoDb) {
+    return mongoDb.collection(collectionName);
+  }
+  return null;
+}
+
+/**
  * Check if MongoDB is the active database.
  */
 export function isUsingMongo() {
@@ -97,6 +112,7 @@ export async function closeDatabase() {
 
 /**
  * Seed MongoDB collections with default data if they are empty.
+ * Also creates indexes for performance-critical collections.
  * This ensures the app works immediately after first MongoDB setup.
  */
 async function seedCollections(db) {
@@ -111,4 +127,16 @@ async function seedCollections(db) {
       console.log(`   → Seeded ${collName}: ${inMemoryDb[collName].length} records`);
     }
   }
+
+  // Create indexes for paymentReceipts collection
+  const receiptsCol = db.collection('paymentReceipts');
+  await receiptsCol.createIndex({ customerId: 1 });
+  await receiptsCol.createIndex({ orderId: 1 }, { unique: true, sparse: true });
+  await receiptsCol.createIndex({ receiptId: 1 }, { unique: true });
+  console.log('   → Indexes created for paymentReceipts');
+
+  // Create indexes for userProfiles collection
+  const profilesCol = db.collection('userProfiles');
+  await profilesCol.createIndex({ userId: 1 }, { unique: true });
+  console.log('   → Indexes created for userProfiles');
 }

@@ -1,6 +1,8 @@
 import { calculateOrderPrice } from '../services/pricingService.js';
 import { extractFileMetadata } from '../services/pdfService.js';
 import { analyzeDocumentAI } from '../services/aiService.js';
+import { isR2Configured, uploadFile, generateFileKey } from '../services/r2Storage.js';
+import { createPaymentReceipt } from '../models/paymentReceipt.js';
 import { db } from '../models/dbStore.js';
 
 export const calculateQuote = (req, res) => {
@@ -16,13 +18,36 @@ export const uploadAndAnalyzeFiles = async (req, res) => {
     }
 
     const processedFiles = [];
+    // Generate a temporary batch ID for grouping files before order creation
+    const batchId = `batch_${Date.now()}`;
 
     for (const file of req.files) {
       const metadata = await extractFileMetadata(file.buffer, file.originalname, file.mimetype);
       const aiAnalysis = analyzeDocumentAI(file.originalname, metadata.fileSize, metadata.pageCount);
 
+      const fileId = `file_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+      let r2Key = null;
+      let r2Url = null;
+
+      // Upload to Cloudflare R2 if configured
+      if (isR2Configured()) {
+        try {
+          const key = generateFileKey(batchId, fileId, file.originalname);
+          const r2Result = await uploadFile(file.buffer, key, file.mimetype, {
+            originalName: file.originalname,
+            uploadedBy: req.user?.id || 'unknown',
+          });
+          r2Key = r2Result.key;
+          r2Url = r2Result.url;
+          console.log(`   ☁️ Uploaded to R2: ${r2Key}`);
+        } catch (r2Error) {
+          console.error(`   ⚠️ R2 upload failed for ${file.originalname}:`, r2Error.message);
+          // Continue without R2 — file metadata is still returned
+        }
+      }
+
       processedFiles.push({
-        id: `file_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+        id: fileId,
         name: file.originalname,
         size: metadata.fileSize,
         mimeType: file.mimetype,
@@ -33,19 +58,23 @@ export const uploadAndAnalyzeFiles = async (req, res) => {
         binding: 'none',
         lamination: 'none',
         coverSheet: 'none',
+        r2Key,
+        r2Url,
         ai: aiAnalysis
       });
     }
 
     return res.json({
       success: true,
-      message: 'Files parsed and analyzed by AI successfully',
-      files: processedFiles
+      message: `Files parsed and analyzed by AI successfully${isR2Configured() ? ' (stored in Cloudflare R2)' : ''}`,
+      files: processedFiles,
+      storageMode: isR2Configured() ? 'cloudflare_r2' : 'memory'
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
+
 
 export const createOrder = (req, res) => {
   const {
@@ -148,6 +177,38 @@ export const createOrder = (req, res) => {
     action: 'ORDER_CREATE',
     details: `Created order ${orderId} for ₹${aggregateQuote.breakdown.finalPrice}`,
     timestamp: new Date().toISOString()
+  });
+
+  // Save payment receipt to MongoDB (async, non-blocking)
+  createPaymentReceipt({
+    orderId,
+    customerId: req.user.id,
+    customerName: req.user.name,
+    customerEmail: req.user.email,
+    amount: aggregateQuote.breakdown.finalPrice,
+    method: paymentMethod,
+    transactionId: `TXN_${Date.now()}_${Math.floor(Math.random() * 10000)}`,
+    status: paymentMethod === 'COD' ? 'PENDING' : 'PAID',
+    receiptData: {
+      items: files.map(f => ({
+        fileName: f.name,
+        pageCount: f.pageCount || 1,
+        printMode: f.printMode || 'bw',
+        binding: f.binding || 'none',
+        cost: calculateOrderPrice({
+          pageCount: f.pageCount || 1,
+          printMode: f.printMode || 'bw',
+          binding: f.binding || 'none',
+        }).breakdown.finalPrice
+      })),
+      ...aggregateQuote.breakdown
+    }
+  }).then(receipt => {
+    if (receipt && !receipt._fallback) {
+      console.log(`   🧾 Payment receipt saved: ${receipt.receiptId}`);
+    }
+  }).catch(err => {
+    console.error('   ⚠️ Failed to save payment receipt:', err.message);
   });
 
   return res.status(201).json({

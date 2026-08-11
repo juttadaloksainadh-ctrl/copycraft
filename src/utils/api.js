@@ -25,3 +25,35 @@ export async function apiFetch(endpoint, options = {}) {
     return { success: false, message: error.message || 'Network request failed' };
   }
 }
+
+/**
+ * Get a pre-signed download URL for a file stored in Cloudflare R2.
+ * Used by dealers to download customer print files.
+ *
+ * @param {string} orderId - The order ID
+ * @param {string} fileId - The file ID
+ * @returns {Promise<{success: boolean, downloadUrl?: string, fileName?: string}>}
+ */
+export async function getFileDownloadUrl(orderId, fileId) {
+  return apiFetch(`/files/${orderId}/${fileId}/download`);
+}
+
+/**
+ * Get payment receipts for the authenticated user.
+ *
+ * @returns {Promise<{success: boolean, receipts?: Array}>}
+ */
+export async function getPaymentReceipts() {
+  return apiFetch('/payments/receipts');
+}
+
+/**
+ * Get a payment receipt for a specific order.
+ *
+ * @param {string} orderId - The order ID
+ * @returns {Promise<{success: boolean, receipt?: object}>}
+ */
+export async function getPaymentReceiptByOrder(orderId) {
+  return apiFetch(`/payments/receipts/order/${orderId}`);
+}
+
