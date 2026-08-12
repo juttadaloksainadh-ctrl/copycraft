@@ -46,7 +46,7 @@ export async function runDeliveredFileCleanup() {
       continue;
     }
 
-    // 48 hours have passed — delete all R2 files for this order
+    // 48 hours have passed — delete all R2 files for this order and clear sensitive data
     try {
       const prefix = `orders/${order.id}/`;
       const files = await listFiles(prefix, 200);
@@ -55,14 +55,50 @@ export async function runDeliveredFileCleanup() {
         for (const file of files) {
           await deleteFile(file.key);
           totalDeleted++;
-          console.log(`   🗑️  Deleted R2 file: ${file.key}`);
+          console.log(`   🗑️  Deleted R2 file from storage: ${file.key}`);
         }
-        console.log(`✅ Cleanup: Deleted ${files.length} file(s) for order ${order.id} (delivered ${Math.round(elapsed / 3600000)}h ago)`);
       }
 
-      // Mark order so it isn't re-scanned
-      order.filesDeletedAt = new Date().toISOString();
+      const filesDeletedAt = new Date().toISOString();
+
+      // Clear sensitive info locally in-memory
+      order.filesDeletedAt = filesDeletedAt;
       order.filesDeletedCount = files.length;
+      order.roomDetails = "[REDACTED - AUTO_DELETED]";
+      if (order.files) {
+        order.files = order.files.map(f => ({
+          ...f,
+          r2Url: null,
+          r2Key: null,
+          status: "PURGED"
+        }));
+      }
+
+      // If MongoDB Atlas is running, clear sensitive fields in the database document as well
+      const { isUsingMongo, getMongoCollection } = await import('../config/db.js');
+      if (isUsingMongo()) {
+        const ordersCol = getMongoCollection('orders');
+        if (ordersCol) {
+          await ordersCol.updateOne(
+            { id: order.id },
+            {
+              $set: {
+                filesDeletedAt,
+                filesDeletedCount: files.length,
+                roomDetails: "[REDACTED - AUTO_DELETED]",
+                files: (order.files || []).map(f => ({
+                  ...f,
+                  r2Url: null,
+                  r2Key: null,
+                  status: "PURGED"
+                }))
+              }
+            }
+          );
+        }
+      }
+
+      console.log(`✅ Cleanup: Purged R2 storage & redacted MongoDB order details for ${order.id} (delivered ${Math.round(elapsed / 3600000)}h ago)`);
       ordersProcessed++;
     } catch (err) {
       console.error(`⚠️ Cleanup error for order ${order.id}:`, err.message);
@@ -70,7 +106,7 @@ export async function runDeliveredFileCleanup() {
   }
 
   if (ordersProcessed > 0) {
-    console.log(`🗑️  File Cleanup Complete: ${totalDeleted} file(s) removed across ${ordersProcessed} delivered order(s).`);
+    console.log(`🗑️  Storage & Database Cleanup Complete: ${totalDeleted} file(s) removed across ${ordersProcessed} delivered order(s).`);
   }
 }
 
