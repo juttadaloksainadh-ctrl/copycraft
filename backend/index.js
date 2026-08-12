@@ -3,6 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import { initDatabase, closeDatabase } from './config/db.js';
 import { initR2 } from './services/r2Storage.js';
+import { startFileCleanupScheduler } from './services/fileCleanupService.js';
 import authRoutes from './routes/authRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
 import dealerRoutes from './routes/dealerRoutes.js';
@@ -102,6 +103,9 @@ async function startServer() {
       console.log(`🌐 Allowed CORS origins: ${allowedOrigins.join(', ')}`);
       console.log(`📁 File Storage: ${r2Ready ? 'Cloudflare R2' : 'In-Memory (configure R2 for cloud storage)'}`);
       console.log(`💳 Payment Receipts: ${dbResult.mode === 'mongodb' ? 'MongoDB' : 'In-Memory (connect MongoDB for persistence)'}`);
+
+      // Start 48-hour post-delivery file cleanup scheduler
+      startFileCleanupScheduler();
     });
   } catch (err) {
     console.error('❌ Failed to start server:', err);

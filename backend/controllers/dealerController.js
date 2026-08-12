@@ -35,6 +35,11 @@ export const updateOrderStatus = (req, res) => {
     note: note || `Order updated to ${status} by ${req.user.name}`
   });
 
+  // Stamp delivery time so the 48h file cleanup scheduler can track it
+  if (status === 'DELIVERED' && !order.deliveredAt) {
+    order.deliveredAt = new Date().toISOString();
+  }
+
   // Log action
   db.auditLogs.unshift({
     id: `log_${Date.now()}`,
@@ -65,11 +70,14 @@ export const verifyDeliveryPin = (req, res) => {
 
   order.orderStatus = 'DELIVERED';
   order.paymentStatus = 'PAID';
+  order.deliveredAt = new Date().toISOString(); // used by 48h file cleanup scheduler
   order.timeline.push({
     status: 'DELIVERED',
     time: new Date().toISOString(),
     note: `Delivered and verified via delivery PIN by ${req.user.name}`
   });
+
+  console.log(`   📦 Order ${order.id} marked DELIVERED — files will be purged from R2 in 48h`);
 
   db.auditLogs.unshift({
     id: `log_${Date.now()}`,
