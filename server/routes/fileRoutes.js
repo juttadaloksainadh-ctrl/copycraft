@@ -96,13 +96,22 @@ router.get('/:orderId', authenticateToken, async (req, res) => {
       return res.status(403).json({ success: false, message: 'Access denied' });
     }
 
-    // If R2 is configured, also list files from R2 for verification
+    // If R2 is configured, also list files from R2 for verification.
+    // Keys are assigned at upload time (before the order exists), so the prefix
+    // is derived from the stored keys rather than from the order ID.
     let r2Files = [];
     if (isR2Configured()) {
-      try {
-        r2Files = await listFiles(`orders/${orderId}/`);
-      } catch {
-        // R2 listing failed — not critical
+      const prefixes = [...new Set(
+        (order.files || [])
+          .filter(f => f.r2Key)
+          .map(f => f.r2Key.slice(0, f.r2Key.lastIndexOf('/') + 1))
+      )];
+      for (const prefix of prefixes) {
+        try {
+          r2Files.push(...await listFiles(prefix));
+        } catch {
+          // R2 listing failed — not critical
+        }
       }
     }
 

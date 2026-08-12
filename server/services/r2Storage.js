@@ -23,6 +23,8 @@ const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || '';
 const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY || '';
 const R2_BUCKET_NAME = process.env.R2_BUCKET_NAME || 'copycraft-files';
 const R2_PUBLIC_URL = process.env.R2_PUBLIC_URL || '';
+// Optional override for any S3-compatible endpoint (local MinIO, AWS S3, tests)
+const R2_ENDPOINT = process.env.R2_ENDPOINT || '';
 
 // Track whether R2 is configured
 let r2Configured = false;
@@ -32,16 +34,19 @@ let s3Client = null;
  * Initialize the R2 client. Called once at startup.
  */
 export function initR2() {
-  if (!R2_ACCOUNT_ID || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY) {
+  if ((!R2_ACCOUNT_ID && !R2_ENDPOINT) || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY) {
     console.log('⚠️  Cloudflare R2 not configured — file uploads will use fallback (in-memory)');
     console.log('   → Set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY in .env');
     r2Configured = false;
     return false;
   }
 
+  const endpoint = R2_ENDPOINT || `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
+
   s3Client = new S3Client({
     region: 'auto',
-    endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+    endpoint,
+    forcePathStyle: Boolean(R2_ENDPOINT),
     credentials: {
       accessKeyId: R2_ACCESS_KEY_ID,
       secretAccessKey: R2_SECRET_ACCESS_KEY,
@@ -93,7 +98,9 @@ export async function uploadFile(buffer, key, contentType, metadata = {}) {
 
   const url = R2_PUBLIC_URL
     ? `${R2_PUBLIC_URL}/${key}`
-    : `https://${R2_BUCKET_NAME}.${R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${key}`;
+    : R2_ENDPOINT
+      ? `${R2_ENDPOINT}/${R2_BUCKET_NAME}/${key}`
+      : `https://${R2_BUCKET_NAME}.${R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${key}`;
 
   return {
     key,

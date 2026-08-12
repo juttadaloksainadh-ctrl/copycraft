@@ -43,13 +43,19 @@ export async function initDatabase() {
     // Dynamic import so mongodb isn't required for in-memory mode
     const { MongoClient } = await import('mongodb');
 
-    console.log('🔄 Connecting to MongoDB...');
+    // TLS is required by MongoDB Atlas (mongodb+srv) but unsupported by a
+    // plain local/self-hosted mongod unless it was started with certificates.
+    const useTls = process.env.MONGODB_TLS
+      ? process.env.MONGODB_TLS === 'true'
+      : mongoUri.startsWith('mongodb+srv://');
+
+    console.log(`🔄 Connecting to MongoDB (TLS: ${useTls ? 'on' : 'off'})...`);
     mongoClient = new MongoClient(mongoUri, {
       maxPoolSize: 10,
       serverSelectionTimeoutMS: 10000,
       socketTimeoutMS: 45000,
       family: 4,
-      tls: true,
+      tls: useTls,
     });
 
     await mongoClient.connect();
