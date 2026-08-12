@@ -7,7 +7,7 @@ import OrderSummary from '../components/customer/OrderSummary';
 import AiSuggestionsModal from '../components/customer/AiSuggestionsModal';
 import { useToast } from '../context/ToastContext';
 import { apiFetch } from '../utils/api';
-import { calculateOrderPrice } from '../../server/services/pricingService';
+import { calculateOrderPrice } from '../utils/pricingService';
 import { Sparkles, ArrowLeft } from 'lucide-react';
 
 export default function UploadPage({ onNavigate }) {

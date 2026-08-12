@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Printer, Zap, ShieldCheck, Truck, Sparkles, ArrowRight, CheckCircle2, Building2, Layers, DollarSign } from 'lucide-react';
 import Navbar from '../components/common/Navbar';
 import Footer from '../components/common/Footer';
-import { calculateOrderPrice } from '../../server/services/pricingService';
+import { calculateOrderPrice } from '../utils/pricingService';
 
 export default function LandingPage({ onNavigate }) {
   const [estPages, setEstPages] = useState(15);
