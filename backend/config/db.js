@@ -120,4 +120,16 @@ async function seedCollections(db) {
 
   const profilesCol = db.collection('userProfiles');
   await profilesCol.createIndex({ userId: 1 }, { unique: true });
+
+  // 14-Day TTL Index for Audit Logs (automatic database cleanup)
+  const auditLogsCol = db.collection('auditLogs');
+  // Ensure we have a timestamp index that expires docs after 14 days (14 * 24 * 3600 seconds)
+  await auditLogsCol.createIndex({ timestamp: 1 }, { expireAfterSeconds: 1209600 });
+  console.log('   → 14-day TTL Index created for auditLogs');
+
+  // 7-Day TTL Index for Notifications
+  const notificationsCol = db.collection('notifications');
+  // Ensure we have a timestamp index that expires docs after 7 days (7 * 24 * 3600 seconds)
+  await notificationsCol.createIndex({ createdAt: 1 }, { expireAfterSeconds: 604800 });
+  console.log('   → 7-day TTL Index created for notifications');
 }
