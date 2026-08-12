@@ -234,6 +234,34 @@ export default function CustomerDashboard({ onNavigate }) {
                 </button>
               </div>
 
+              {/* Help Desk Contact Cards */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                gap: '1rem',
+                marginBottom: '1rem'
+              }}>
+                <div className="card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', border: '1px solid var(--border)' }}>
+                  <h4 style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--primary)' }}>
+                    📧 Email Support
+                  </h4>
+                  <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-muted)' }}>Send your print files or queries directly to:</p>
+                  <a href="mailto:copycraftprints@gmail.com" style={{ fontWeight: 600, color: 'var(--text-main)', textDecoration: 'none' }}>
+                    copycraftprints@gmail.com
+                  </a>
+                </div>
+                <div className="card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', border: '1px solid var(--border)' }}>
+                  <h4 style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--primary)' }}>
+                    📞 Hotline Contacts
+                  </h4>
+                  <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-muted)' }}>Call or WhatsApp for instant delivery support:</p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontWeight: 600 }}>
+                    <a href="tel:+917981001141" style={{ color: 'var(--text-main)', textDecoration: 'none' }}>+91 79810 01141</a>
+                    <a href="tel:+917337219975" style={{ color: 'var(--text-main)', textDecoration: 'none' }}>+91 73372 19975</a>
+                  </div>
+                </div>
+              </div>
+
               <DataTable
                 columns={[
                   { header: 'Ticket ID', accessor: 'id', cell: row => <span style={{ fontWeight: 700 }}>{row.id}</span> },
