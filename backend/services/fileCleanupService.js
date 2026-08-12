@@ -35,11 +35,10 @@ export async function runDeliveredFileCleanup() {
     if (order.orderStatus !== 'DELIVERED') continue;
     if (order.filesDeletedAt) continue;
 
-    // Get the DELIVERED timestamp from the order timeline
-    const deliveredEvent = order.timeline?.find(t => t.status === 'DELIVERED');
-    if (!deliveredEvent) continue;
+    // deliveredAt is stamped by the distributor's PIN verification
+    if (!order.deliveredAt) continue;
 
-    const deliveredAt = new Date(deliveredEvent.time).getTime();
+    const deliveredAt = new Date(order.deliveredAt).getTime();
     const elapsed = now - deliveredAt;
 
     if (elapsed < DELETION_DELAY_MS) {
