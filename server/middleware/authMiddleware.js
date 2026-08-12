@@ -1,7 +1,11 @@
 import { verifyToken } from '../config/jwt.js';
-import { db } from '../models/dbStore.js';
+import { getDb, getMongoCollection, isUsingMongo } from '../config/db.js';
 
-export const authenticateToken = (req, res, next) => {
+/**
+ * Authenticate the Bearer token from the Authorization header.
+ * Works with both in-memory store (dev/demo) and MongoDB (production).
+ */
+export const authenticateToken = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
@@ -14,11 +18,37 @@ export const authenticateToken = (req, res, next) => {
     return res.status(403).json({ success: false, message: 'Invalid or expired token' });
   }
 
-  const user = db.users.find(u => u.id === decoded.id);
-  if (!user) {
-    return res.status(403).json({ success: false, message: 'User not found' });
-  }
+  try {
+    let user = null;
 
-  req.user = user;
-  next();
+    if (isUsingMongo()) {
+      // MongoDB mode — look up by the id stored in the token
+      const usersCol = getMongoCollection('users');
+      // Support both string `id` field and MongoDB ObjectId `_id`
+      user = await usersCol.findOne({ id: decoded.id });
+      if (!user) {
+        // Fallback: try matching _id if id field isn't present
+        const { ObjectId } = await import('mongodb');
+        try {
+          user = await usersCol.findOne({ _id: new ObjectId(decoded.id) });
+        } catch (_) {
+          // decoded.id is not a valid ObjectId — leave user as null
+        }
+      }
+    } else {
+      // In-memory mode
+      const { db } = getDb();
+      user = db.users.find(u => u.id === decoded.id);
+    }
+
+    if (!user) {
+      return res.status(403).json({ success: false, message: 'User not found' });
+    }
+
+    req.user = user;
+    next();
+  } catch (err) {
+    console.error('authMiddleware error:', err.message);
+    return res.status(500).json({ success: false, message: 'Authentication error' });
+  }
 };

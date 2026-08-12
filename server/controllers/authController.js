@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import { generateToken } from '../config/jwt.js';
 import { db } from '../models/dbStore.js';
 import { createUserProfile, getUserProfile, updateUserProfile } from '../models/userProfile.js';
+import { getMongoCollection, isUsingMongo } from '../config/db.js';
 
 // Helper to log intrusion alerts to Admin audit log
 function reportSecurityAlert(portalName, email, reason, details = '') {
@@ -28,7 +29,6 @@ function generateUniqueDeliveryPin() {
     pin = Math.floor(100000 + Math.random() * 900000).toString();
     attempts++;
     if (attempts > 10000) {
-      // Extremely unlikely fallback — extend to 7 digits
       pin = Math.floor(1000000 + Math.random() * 9000000).toString();
     }
   } while (existingPins.has(pin));
@@ -36,18 +36,42 @@ function generateUniqueDeliveryPin() {
 }
 
 /**
+ * Look up a user by email from MongoDB or the in-memory store,
+ * depending on which is active at runtime.
+ */
+async function findUserByEmail(email) {
+  if (isUsingMongo()) {
+    const usersCol = getMongoCollection('users');
+    return usersCol.findOne({ email: { $regex: new RegExp(`^${email}$`, 'i') } });
+  }
+  return db.users.find(u => u.email.toLowerCase() === email.toLowerCase());
+}
+
+/**
+ * Look up a user by id from MongoDB or the in-memory store.
+ */
+async function findUserById(id) {
+  if (isUsingMongo()) {
+    const usersCol = getMongoCollection('users');
+    return usersCol.findOne({ id });
+  }
+  return db.users.find(u => u.id === id);
+}
+
+/**
  * POST /api/auth/register
  * Single-step customer registration. No OTP required.
  * Generates a unique 6-digit delivery PIN for the customer.
  */
-export const register = (req, res) => {
+export const register = async (req, res) => {
   const { name, phone, email, password, collegeId = 'clg_1', roomDetails } = req.body;
 
   if (!name || !phone || !email || !password) {
     return res.status(400).json({ success: false, message: 'Name, phone, email and password are all required' });
   }
 
-  const existingUser = db.users.find(u => u.email.toLowerCase() === email.toLowerCase());
+  // Check for duplicate email in whichever store is active
+  const existingUser = await findUserByEmail(email);
   if (existingUser) {
     return res.status(400).json({ success: false, message: 'Email address is already registered' });
   }
@@ -73,7 +97,12 @@ export const register = (req, res) => {
     createdAt: new Date().toISOString()
   };
 
-  db.users.push(newUser);
+  if (isUsingMongo()) {
+    const usersCol = getMongoCollection('users');
+    await usersCol.insertOne(newUser);
+  } else {
+    db.users.push(newUser);
+  }
 
   db.auditLogs.unshift({
     id: `log_${Date.now()}`,
@@ -112,16 +141,18 @@ export const register = (req, res) => {
  * POST /api/auth/login
  * Unified login for all portals (customer, dealer, distributor, admin).
  * Just email + password. No OTP step.
+ * Works with both MongoDB (production) and in-memory store (dev/demo).
  */
-export const login = (req, res) => {
+export const login = async (req, res) => {
   const { email, password, portal = 'customer' } = req.body;
 
   if (!email || !password) {
     return res.status(400).json({ success: false, message: 'Email and password are required' });
   }
 
-  const user = db.users.find(u => u.email.toLowerCase() === email.toLowerCase());
-  
+  // Resolve user from whichever store is active
+  const user = await findUserByEmail(email);
+
   // Intrusion Check 1: User does not exist
   if (!user) {
     if (portal !== 'customer') {
@@ -162,9 +193,13 @@ export const login = (req, res) => {
     });
   }
 
-  // Ensure user has a unique delivery PIN
+  // Ensure user has a unique delivery PIN (patch in-memory; MongoDB users keep theirs)
   if (!user.deliveryPin) {
     user.deliveryPin = generateUniqueDeliveryPin();
+    if (isUsingMongo()) {
+      const usersCol = getMongoCollection('users');
+      await usersCol.updateOne({ id: user.id }, { $set: { deliveryPin: user.deliveryPin } });
+    }
   }
 
   // All portals: direct login with token
@@ -183,14 +218,15 @@ export const login = (req, res) => {
  * GET /api/auth/delivery-pin
  * Returns the authenticated customer's delivery verification PIN.
  */
-export const getDeliveryPin = (req, res) => {
-  const user = db.users.find(u => u.id === req.user.id);
-  if (!user) {
-    return res.status(404).json({ success: false, message: 'User not found' });
-  }
+export const getDeliveryPin = async (req, res) => {
+  const user = await findUserById(req.user.id) || req.user;
 
   if (!user.deliveryPin) {
     user.deliveryPin = generateUniqueDeliveryPin();
+    if (isUsingMongo()) {
+      const usersCol = getMongoCollection('users');
+      await usersCol.updateOne({ id: user.id }, { $set: { deliveryPin: user.deliveryPin } });
+    }
   }
 
   return res.json({
@@ -201,7 +237,7 @@ export const getDeliveryPin = (req, res) => {
 };
 
 export const getProfile = async (req, res) => {
-  const user = db.users.find(u => u.id === req.user.id) || req.user;
+  const user = await findUserById(req.user.id) || req.user;
   if (!user.deliveryPin) {
     user.deliveryPin = generateUniqueDeliveryPin();
   }
@@ -226,16 +262,22 @@ export const getProfile = async (req, res) => {
 };
 
 export const updateProfile = async (req, res) => {
-  const user = db.users.find(u => u.id === req.user.id);
+  const user = await findUserById(req.user.id);
   if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
   const { name, phone, roomDetails, collegeId, avatarUrl, preferences, addresses } = req.body;
 
-  // Update base user fields in the main store
-  if (name) user.name = name;
-  if (phone) user.phone = phone;
-  if (roomDetails) user.roomDetails = roomDetails;
-  if (collegeId) user.collegeId = collegeId;
+  // Update base user fields
+  const baseUpdates = {};
+  if (name) { user.name = name; baseUpdates.name = name; }
+  if (phone) { user.phone = phone; baseUpdates.phone = phone; }
+  if (roomDetails) { user.roomDetails = roomDetails; baseUpdates.roomDetails = roomDetails; }
+  if (collegeId) { user.collegeId = collegeId; baseUpdates.collegeId = collegeId; }
+
+  if (isUsingMongo() && Object.keys(baseUpdates).length > 0) {
+    const usersCol = getMongoCollection('users');
+    await usersCol.updateOne({ id: user.id }, { $set: baseUpdates });
+  }
 
   // Update extended profile fields in MongoDB
   const mongoUpdates = {};

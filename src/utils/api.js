@@ -1,4 +1,9 @@
-const API_BASE = '/api';
+// In development, Vite's proxy rewrites /api → http://localhost:5000/api.
+// In production (Vercel), set VITE_API_URL=https://your-backend.onrender.com
+// in Vercel's project environment variables — no trailing slash.
+const API_BASE = import.meta.env.VITE_API_URL
+  ? `${import.meta.env.VITE_API_URL}/api`
+  : '/api';
 
 export async function apiFetch(endpoint, options = {}) {
   const token = localStorage.getItem('copycraft_token');

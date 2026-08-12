@@ -15,11 +15,32 @@ import paymentRoutes from './routes/paymentRoutes.js';
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Enable CORS and JSON parsing
+// ---- CORS ----
+// CORS_ORIGIN can be a single URL or a comma-separated list, e.g.:
+//   CORS_ORIGIN=https://copycraft-nine.vercel.app,http://localhost:3000
+// This lets the same backend serve your local dev frontend AND your
+// deployed Vercel frontend without blocking either one.
+const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:3000')
+  .split(',')
+  .map(o => o.trim())
+  .filter(Boolean);
+
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+  origin: (origin, callback) => {
+    // Allow non-browser requests (curl, server-to-server, health checks) which have no Origin header
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    console.warn(`⚠️  CORS blocked request from origin: ${origin}`);
+    console.warn(`   → Allowed origins: ${allowedOrigins.join(', ')}`);
+    return callback(new Error('Not allowed by CORS'));
+  },
   credentials: true
 }));
+
 app.use(express.json({ limit: `${process.env.MAX_FILE_SIZE_MB || 50}mb` }));
 app.use(express.urlencoded({ extended: true, limit: `${process.env.MAX_FILE_SIZE_MB || 50}mb` }));
 
@@ -78,6 +99,7 @@ async function startServer() {
       console.log(`🚀 CopyCraft Backend Server running on http://localhost:${PORT}`);
       console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
       console.log(`🔐 JWT Expiry: ${process.env.JWT_EXPIRES_IN || '7d'}`);
+      console.log(`🌐 Allowed CORS origins: ${allowedOrigins.join(', ')}`);
       console.log(`📁 File Storage: ${r2Ready ? 'Cloudflare R2' : 'In-Memory (configure R2 for cloud storage)'}`);
       console.log(`💳 Payment Receipts: ${dbResult.mode === 'mongodb' ? 'MongoDB' : 'In-Memory (connect MongoDB for persistence)'}`);
     });
@@ -100,4 +122,3 @@ process.on('SIGTERM', async () => {
 });
 
 startServer();
-
