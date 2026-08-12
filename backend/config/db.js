@@ -1,52 +1,64 @@
 /**
- * CopyCraft Database Configuration — Cloudflare R2 JSON Database
- * ---------------------------------------------------------------
- * Uses Cloudflare R2 Object Storage as the persistent database engine.
- * Reads data/app_database.json from R2 on startup, and syncs mutations back to R2.
+ * CopyCraft Database Configuration — MongoDB Atlas Engine
+ * --------------------------------------------------------
+ * Supports:
+ *   1. MongoDB Atlas — Primary production database
+ *   2. In-memory store (dbStore.js) — Graceful fallback if MongoDB is unreachable
  */
 
+import dns from 'dns';
 import { db as inMemoryDb } from '../models/dbStore.js';
-import { isR2Configured, loadDatabaseFromR2, saveDatabaseToR2 } from '../services/r2Storage.js';
 
-let isDatabaseInitialized = false;
+// Force Node.js DNS to prefer IPv4 over IPv6 for MongoDB Atlas connection reliability
+try {
+  dns.setDefaultResultOrder('ipv4first');
+} catch (e) {}
+
+let isMongoConnected = false;
+let mongoClient = null;
+let mongoDb = null;
 
 /**
- * Initialize the Cloudflare R2 Database Store.
+ * Initialize the MongoDB database connection.
  * Call this once at server startup.
  */
 export async function initDatabase() {
-  console.log('☁️  Initializing Cloudflare R2 Database Engine...');
+  const mongoUri = process.env.MONGODB_URI;
 
-  if (!isR2Configured()) {
-    console.log('📦 R2 Storage not connected — running in Local In-Memory Mode');
-    isDatabaseInitialized = true;
+  if (!mongoUri || mongoUri.trim() === '' || process.env.DB_MODE === 'memory') {
+    console.log('📦 Database Mode: In-Memory Store (demo mode)');
     return { mode: 'memory', db: inMemoryDb };
   }
 
   try {
-    const remoteData = await loadDatabaseFromR2();
+    const { MongoClient } = await import('mongodb');
 
-    if (remoteData && typeof remoteData === 'object') {
-      // Merge remote R2 JSON collections into inMemoryDb
-      for (const [key, val] of Object.entries(remoteData)) {
-        if (Array.isArray(val)) {
-          inMemoryDb[key] = val;
-        }
-      }
-      console.log('✅ Connected to Cloudflare R2 Database Store');
-      console.log(`   → Loaded ${Object.keys(remoteData).length} collections from R2`);
-    } else {
-      console.log('📦 No existing R2 database found — seeding initial database & saving to R2...');
-      await saveDatabaseToR2(inMemoryDb);
-      console.log('✅ Initial database seeded into Cloudflare R2');
-    }
+    console.log('🔄 Connecting to MongoDB...');
+    mongoClient = new MongoClient(mongoUri, {
+      maxPoolSize: 10,
+      serverSelectionTimeoutMS: 10000,
+      socketTimeoutMS: 45000,
+      family: 4,
+      tls: true,
+    });
 
-    isDatabaseInitialized = true;
-    return { mode: 'cloudflare_r2', db: inMemoryDb };
+    await mongoClient.connect();
+    mongoDb = mongoClient.db(process.env.DB_NAME || 'copycraft_db');
+
+    await mongoDb.command({ ping: 1 });
+    isMongoConnected = true;
+
+    console.log('✅ MongoDB Connected Successfully');
+    console.log(`   → Database: ${mongoDb.databaseName}`);
+    console.log(`   → Host: ${mongoUri.includes('@') ? mongoUri.split('@')[1].split('/')[0] : 'localhost'}`);
+
+    await seedCollections(mongoDb);
+
+    return { mode: 'mongodb', db: mongoDb, client: mongoClient };
   } catch (err) {
-    console.error('⚠️  Failed to load R2 database:', err.message);
-    console.log('📦 Falling back to local in-memory store');
-    isDatabaseInitialized = true;
+    console.error('❌ MongoDB Connection Failed:', err.message);
+    console.log('📦 Falling back to In-Memory Store (demo mode)');
+    isMongoConnected = false;
     return { mode: 'memory', db: inMemoryDb };
   }
 }
@@ -55,23 +67,57 @@ export async function initDatabase() {
  * Get the active database reference.
  */
 export function getDb() {
-  return { mode: 'cloudflare_r2', db: inMemoryDb };
+  if (isMongoConnected && mongoDb) {
+    return { mode: 'mongodb', db: mongoDb };
+  }
+  return { mode: 'memory', db: inMemoryDb };
 }
 
 /**
- * Get MongoDB collection (returns null since MongoDB is removed).
+ * Get a specific MongoDB collection by name.
  */
-export function getMongoCollection() {
+export function getMongoCollection(collectionName) {
+  if (isMongoConnected && mongoDb) {
+    return mongoDb.collection(collectionName);
+  }
   return null;
 }
 
 /**
- * MongoDB status check (always false now).
+ * Check if MongoDB is currently active.
  */
 export function isUsingMongo() {
-  return false;
+  return isMongoConnected;
 }
 
+/**
+ * Close MongoDB connection gracefully.
+ */
 export async function closeDatabase() {
-  console.log('🔌 Cloudflare R2 database session saved');
+  if (mongoClient) {
+    await mongoClient.close();
+    console.log('🔌 MongoDB connection closed');
+  }
+}
+
+async function seedCollections(db) {
+  const collections = ['users', 'orders', 'colleges', 'coupons', 'notifications', 'auditLogs', 'supportTickets'];
+
+  for (const collName of collections) {
+    const collection = db.collection(collName);
+    const count = await collection.countDocuments();
+
+    if (count === 0 && inMemoryDb[collName] && inMemoryDb[collName].length > 0) {
+      await collection.insertMany(inMemoryDb[collName]);
+      console.log(`   → Seeded ${collName}: ${inMemoryDb[collName].length} records`);
+    }
+  }
+
+  const receiptsCol = db.collection('paymentReceipts');
+  await receiptsCol.createIndex({ customerId: 1 });
+  await receiptsCol.createIndex({ orderId: 1 }, { unique: true, sparse: true });
+  await receiptsCol.createIndex({ receiptId: 1 }, { unique: true });
+
+  const profilesCol = db.collection('userProfiles');
+  await profilesCol.createIndex({ userId: 1 }, { unique: true });
 }

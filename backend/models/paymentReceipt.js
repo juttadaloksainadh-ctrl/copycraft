@@ -1,62 +1,77 @@
 /**
- * CopyCraft — Payment Receipt Model (Cloudflare R2 Persistent Engine)
- * ---------------------------------------------------------------------
- * Stores payment receipt data in dbStore and synced to R2.
+ * CopyCraft — Payment Receipt Model (MongoDB + Fallback)
+ * --------------------------------------------------------
+ * Stores payment receipt data in MongoDB collection `paymentReceipts`.
  */
 
-import { db as dbStore, syncDbToR2 } from './dbStore.js';
+import { getMongoCollection } from '../config/db.js';
+import { db as dbStore } from './dbStore.js';
 
-if (!dbStore.paymentReceipts) {
-  dbStore.paymentReceipts = [];
-}
-
-/**
- * Create a new payment receipt.
- */
 export async function createPaymentReceipt(receiptData) {
+  const collection = getMongoCollection('paymentReceipts');
+  if (!collection) {
+    const receipt = {
+      receiptId: `RCT-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
+      ...receiptData,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      _fallback: true
+    };
+    dbStore.paymentReceipts?.unshift(receipt);
+    return receipt;
+  }
+
   const receipt = {
     receiptId: `RCT-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
     ...receiptData,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    createdAt: new Date(),
+    updatedAt: new Date(),
   };
 
-  dbStore.paymentReceipts.unshift(receipt);
-  syncDbToR2();
-
-  return receipt;
+  const result = await collection.insertOne(receipt);
+  return { ...receipt, _id: result.insertedId };
 }
 
-/**
- * Get all payment receipts for a customer.
- */
 export async function getReceiptsByCustomer(customerId) {
-  return dbStore.paymentReceipts.filter(r => r.customerId === customerId);
+  const collection = getMongoCollection('paymentReceipts');
+  if (!collection) {
+    return dbStore.paymentReceipts?.filter(r => r.customerId === customerId) || [];
+  }
+
+  return collection.find({ customerId }).sort({ createdAt: -1 }).toArray();
 }
 
-/**
- * Get a payment receipt by order ID.
- */
 export async function getReceiptByOrderId(orderId) {
-  return dbStore.paymentReceipts.find(r => r.orderId === orderId) || null;
+  const collection = getMongoCollection('paymentReceipts');
+  if (!collection) {
+    return dbStore.paymentReceipts?.find(r => r.orderId === orderId) || null;
+  }
+
+  return collection.findOne({ orderId });
 }
 
-/**
- * Get a payment receipt by its receipt ID.
- */
 export async function getReceiptById(receiptId) {
-  return dbStore.paymentReceipts.find(r => r.receiptId === receiptId) || null;
+  const collection = getMongoCollection('paymentReceipts');
+  if (!collection) {
+    return dbStore.paymentReceipts?.find(r => r.receiptId === receiptId) || null;
+  }
+
+  return collection.findOne({ receiptId });
 }
 
-/**
- * Update receipt status (e.g., mark as REFUNDED).
- */
 export async function updateReceiptStatus(receiptId, updates) {
-  const receipt = await getReceiptById(receiptId);
-  if (!receipt) return null;
+  const collection = getMongoCollection('paymentReceipts');
+  if (!collection) {
+    const receipt = dbStore.paymentReceipts?.find(r => r.receiptId === receiptId);
+    if (receipt) Object.assign(receipt, updates, { updatedAt: new Date().toISOString() });
+    return receipt;
+  }
 
-  Object.assign(receipt, updates, { updatedAt: new Date().toISOString() });
-  syncDbToR2();
+  const result = await collection.findOneAndUpdate(
+    { receiptId },
+    { $set: { ...updates, updatedAt: new Date() } },
+    { returnDocument: 'after' }
+  );
 
-  return receipt;
+  return result;
 }

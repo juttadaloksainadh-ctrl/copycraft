@@ -1,7 +1,8 @@
 import bcrypt from 'bcryptjs';
 import { generateToken } from '../config/jwt.js';
-import { db, syncDbToR2 } from '../models/dbStore.js';
+import { db } from '../models/dbStore.js';
 import { createUserProfile, getUserProfile, updateUserProfile } from '../models/userProfile.js';
+import { getMongoCollection, isUsingMongo } from '../config/db.js';
 
 // Helper to log intrusion alerts to Admin audit log
 function reportSecurityAlert(portalName, email, reason, details = '') {
@@ -14,13 +15,8 @@ function reportSecurityAlert(portalName, email, reason, details = '') {
     timestamp: new Date().toISOString(),
     isAlert: true
   });
-  syncDbToR2();
 }
 
-/**
- * Generate a unique 6-digit delivery PIN.
- * Ensures no two users share the same PIN.
- */
 function generateUniqueDeliveryPin() {
   const existingPins = new Set(db.users.map(u => u.deliveryPin).filter(Boolean));
   let pin;
@@ -36,16 +32,21 @@ function generateUniqueDeliveryPin() {
 }
 
 async function findUserByEmail(email) {
+  if (isUsingMongo()) {
+    const usersCol = getMongoCollection('users');
+    return usersCol.findOne({ email: { $regex: new RegExp(`^${email}$`, 'i') } });
+  }
   return db.users.find(u => u.email.toLowerCase() === email.toLowerCase());
 }
 
 async function findUserById(id) {
+  if (isUsingMongo()) {
+    const usersCol = getMongoCollection('users');
+    return usersCol.findOne({ id });
+  }
   return db.users.find(u => u.id === id);
 }
 
-/**
- * POST /api/auth/register
- */
 export const register = async (req, res) => {
   const { name, phone, email, password, collegeId = 'clg_1', roomDetails } = req.body;
 
@@ -79,7 +80,12 @@ export const register = async (req, res) => {
     createdAt: new Date().toISOString()
   };
 
-  db.users.push(newUser);
+  if (isUsingMongo()) {
+    const usersCol = getMongoCollection('users');
+    await usersCol.insertOne(newUser);
+  } else {
+    db.users.push(newUser);
+  }
 
   db.auditLogs.unshift({
     id: `log_${Date.now()}`,
@@ -90,13 +96,15 @@ export const register = async (req, res) => {
     timestamp: new Date().toISOString()
   });
 
-  syncDbToR2();
-
   createUserProfile(newUser.id, {
     preferences: { theme: 'system', language: 'en' },
     addresses: roomDetails ? [{ label: 'Default', hostel: roomDetails, room: '', landmark: '', isDefault: true }] : [],
+  }).then(profile => {
+    if (profile && !profile._fallback) {
+      console.log(`   👤 User profile created in MongoDB for ${newUser.name}`);
+    }
   }).catch(err => {
-    console.error('⚠️ Failed to create user profile:', err.message);
+    console.error('   ⚠️ Failed to create user profile:', err.message);
   });
 
   const token = generateToken({ id: newUser.id, role: newUser.role, email: newUser.email });
@@ -111,9 +119,6 @@ export const register = async (req, res) => {
   });
 };
 
-/**
- * POST /api/auth/login
- */
 export const login = async (req, res) => {
   const { email, password, portal = 'customer' } = req.body;
 
@@ -162,7 +167,10 @@ export const login = async (req, res) => {
 
   if (!user.deliveryPin) {
     user.deliveryPin = generateUniqueDeliveryPin();
-    syncDbToR2();
+    if (isUsingMongo()) {
+      const usersCol = getMongoCollection('users');
+      await usersCol.updateOne({ id: user.id }, { $set: { deliveryPin: user.deliveryPin } });
+    }
   }
 
   const token = generateToken({ id: user.id, role: user.role, email: user.email });
@@ -176,15 +184,15 @@ export const login = async (req, res) => {
   });
 };
 
-/**
- * GET /api/auth/delivery-pin
- */
 export const getDeliveryPin = async (req, res) => {
   const user = await findUserById(req.user.id) || req.user;
 
   if (!user.deliveryPin) {
     user.deliveryPin = generateUniqueDeliveryPin();
-    syncDbToR2();
+    if (isUsingMongo()) {
+      const usersCol = getMongoCollection('users');
+      await usersCol.updateOne({ id: user.id }, { $set: { deliveryPin: user.deliveryPin } });
+    }
   }
 
   return res.json({
@@ -223,10 +231,16 @@ export const updateProfile = async (req, res) => {
 
   const { name, phone, roomDetails, collegeId, avatarUrl, preferences, addresses } = req.body;
 
-  if (name) user.name = name;
-  if (phone) user.phone = phone;
-  if (roomDetails) user.roomDetails = roomDetails;
-  if (collegeId) user.collegeId = collegeId;
+  const baseUpdates = {};
+  if (name) { user.name = name; baseUpdates.name = name; }
+  if (phone) { user.phone = phone; baseUpdates.phone = phone; }
+  if (roomDetails) { user.roomDetails = roomDetails; baseUpdates.roomDetails = roomDetails; }
+  if (collegeId) { user.collegeId = collegeId; baseUpdates.collegeId = collegeId; }
+
+  if (isUsingMongo() && Object.keys(baseUpdates).length > 0) {
+    const usersCol = getMongoCollection('users');
+    await usersCol.updateOne({ id: user.id }, { $set: baseUpdates });
+  }
 
   const mongoUpdates = {};
   if (avatarUrl !== undefined) mongoUpdates.avatarUrl = avatarUrl;
@@ -234,9 +248,11 @@ export const updateProfile = async (req, res) => {
   if (addresses) mongoUpdates.addresses = addresses;
 
   if (Object.keys(mongoUpdates).length > 0) {
-    await updateUserProfile(req.user.id, mongoUpdates);
-  } else {
-    syncDbToR2();
+    try {
+      await updateUserProfile(req.user.id, mongoUpdates);
+    } catch (err) {
+      console.error('⚠️ Failed to update profile:', err.message);
+    }
   }
 
   const { passwordHash: _, ...userWithoutPassword } = user;
@@ -260,7 +276,6 @@ export const markNotificationsRead = (req, res) => {
       n.read = true;
     }
   });
-  syncDbToR2();
   return res.json({ success: true, message: 'Notifications marked as read' });
 };
 
@@ -275,6 +290,5 @@ export const createNotification = ({ userId, type, title, message }) => {
     createdAt: new Date().toISOString()
   };
   db.notifications.unshift(notif);
-  syncDbToR2();
   return notif;
 };

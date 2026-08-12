@@ -48,35 +48,39 @@ async function apiCall(method, path, body, token) {
 // ─────────────────────────────────────────────
 // 1. MONGODB
 // ─────────────────────────────────────────────
-// 1. CLOUDFLARE R2 DATABASE STORE
+// 1. MONGODB ATLAS
 // ─────────────────────────────────────────────
-async function testR2Database() {
-  console.log('\n\x1b[1m── 1. Cloudflare R2 Database Store ───────────\x1b[0m');
-  const accountId = process.env.R2_ACCOUNT_ID;
-  const accessKey = process.env.R2_ACCESS_KEY_ID;
-  const secretKey = process.env.R2_SECRET_ACCESS_KEY;
-  const bucketName = process.env.R2_BUCKET_NAME || 'copycraft-files';
-
-  if (!accountId || !accessKey || !secretKey) {
-    log('R2 Database Engine', 'FAIL', 'R2 credentials missing in .env');
+async function testMongoDB() {
+  console.log('\n\x1b[1m── 1. MongoDB Atlas ──────────────────────────\x1b[0m');
+  const uri = process.env.MONGODB_URI;
+  if (!uri) {
+    log('MONGODB_URI', 'FAIL', 'Not set in .env');
     return;
   }
+  log('MONGODB_URI', 'INFO', `Found (cluster: ${uri.split('@')[1]?.split('/')[0] ?? 'unknown'})`);
 
   try {
-    const { initR2, loadDatabaseFromR2 } = await import('./services/r2Storage.js');
-    initR2();
-    const dbData = await loadDatabaseFromR2();
-    if (dbData) {
-      log('R2 Database Key', 'PASS', `Loaded "data/app_database.json" from bucket "${bucketName}"`);
-      const userCount = dbData.users?.length || 0;
-      log('User Collection', 'PASS', `${userCount} active user record(s) persisted in R2`);
-    } else {
-      log('R2 Database Key', 'INFO', `Database key "data/app_database.json" ready for initial write on server startup`);
+    const { MongoClient } = await import('mongodb');
+    const client = new MongoClient(uri, { serverSelectionTimeoutMS: 8000, family: 4, tls: true });
+    await client.connect();
+    const db = client.db(process.env.DB_NAME || 'copycraft_db');
+    await db.command({ ping: 1 });
+    const colls = await db.listCollections().toArray();
+    log('Connection', 'PASS', `Connected — DB: ${db.databaseName}, Collections: ${colls.map(c => c.name).join(', ') || 'none yet'}`);
+
+    const users = db.collection('users');
+    const count = await users.countDocuments();
+    if (count > 0) {
+      log('Seed Data', 'PASS', `${count} user(s) found in users collection`);
+      const admin = await users.findOne({ role: { $in: ['admin', 'super_admin'] } });
+      if (admin) log('Admin User', 'PASS', `Found: ${admin.email}`);
     }
+    await client.close();
   } catch (err) {
-    log('R2 Database Engine', 'FAIL', err.message);
+    log('Connection', 'FAIL', err.message);
   }
 }
+
 
 
 // ─────────────────────────────────────────────
@@ -326,7 +330,7 @@ async function main() {
   console.log('║   CopyCraft API & Credential Health Check  ║');
   console.log('╚════════════════════════════════════════════╝\x1b[0m');
 
-  await testR2Database();
+  await testMongoDB();
   await testR2();
   await testJWT();
   await testEndpoints();
