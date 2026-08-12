@@ -1,8 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { generateToken } from '../config/jwt.js';
-import { db } from '../models/dbStore.js';
+import { db, syncDbToR2 } from '../models/dbStore.js';
 import { createUserProfile, getUserProfile, updateUserProfile } from '../models/userProfile.js';
-import { getMongoCollection, isUsingMongo } from '../config/db.js';
 
 // Helper to log intrusion alerts to Admin audit log
 function reportSecurityAlert(portalName, email, reason, details = '') {
@@ -15,6 +14,7 @@ function reportSecurityAlert(portalName, email, reason, details = '') {
     timestamp: new Date().toISOString(),
     isAlert: true
   });
+  syncDbToR2();
 }
 
 /**
@@ -35,33 +35,16 @@ function generateUniqueDeliveryPin() {
   return pin;
 }
 
-/**
- * Look up a user by email from MongoDB or the in-memory store,
- * depending on which is active at runtime.
- */
 async function findUserByEmail(email) {
-  if (isUsingMongo()) {
-    const usersCol = getMongoCollection('users');
-    return usersCol.findOne({ email: { $regex: new RegExp(`^${email}$`, 'i') } });
-  }
   return db.users.find(u => u.email.toLowerCase() === email.toLowerCase());
 }
 
-/**
- * Look up a user by id from MongoDB or the in-memory store.
- */
 async function findUserById(id) {
-  if (isUsingMongo()) {
-    const usersCol = getMongoCollection('users');
-    return usersCol.findOne({ id });
-  }
   return db.users.find(u => u.id === id);
 }
 
 /**
  * POST /api/auth/register
- * Single-step customer registration. No OTP required.
- * Generates a unique 6-digit delivery PIN for the customer.
  */
 export const register = async (req, res) => {
   const { name, phone, email, password, collegeId = 'clg_1', roomDetails } = req.body;
@@ -70,7 +53,6 @@ export const register = async (req, res) => {
     return res.status(400).json({ success: false, message: 'Name, phone, email and password are all required' });
   }
 
-  // Check for duplicate email in whichever store is active
   const existingUser = await findUserByEmail(email);
   if (existingUser) {
     return res.status(400).json({ success: false, message: 'Email address is already registered' });
@@ -97,12 +79,7 @@ export const register = async (req, res) => {
     createdAt: new Date().toISOString()
   };
 
-  if (isUsingMongo()) {
-    const usersCol = getMongoCollection('users');
-    await usersCol.insertOne(newUser);
-  } else {
-    db.users.push(newUser);
-  }
+  db.users.push(newUser);
 
   db.auditLogs.unshift({
     id: `log_${Date.now()}`,
@@ -113,16 +90,13 @@ export const register = async (req, res) => {
     timestamp: new Date().toISOString()
   });
 
-  // Create extended profile in MongoDB (async, non-blocking)
+  syncDbToR2();
+
   createUserProfile(newUser.id, {
     preferences: { theme: 'system', language: 'en' },
     addresses: roomDetails ? [{ label: 'Default', hostel: roomDetails, room: '', landmark: '', isDefault: true }] : [],
-  }).then(profile => {
-    if (profile && !profile._fallback) {
-      console.log(`   👤 User profile created in MongoDB for ${newUser.name}`);
-    }
   }).catch(err => {
-    console.error('   ⚠️ Failed to create user profile:', err.message);
+    console.error('⚠️ Failed to create user profile:', err.message);
   });
 
   const token = generateToken({ id: newUser.id, role: newUser.role, email: newUser.email });
@@ -139,9 +113,6 @@ export const register = async (req, res) => {
 
 /**
  * POST /api/auth/login
- * Unified login for all portals (customer, dealer, distributor, admin).
- * Just email + password. No OTP step.
- * Works with both MongoDB (production) and in-memory store (dev/demo).
  */
 export const login = async (req, res) => {
   const { email, password, portal = 'customer' } = req.body;
@@ -150,10 +121,8 @@ export const login = async (req, res) => {
     return res.status(400).json({ success: false, message: 'Email and password are required' });
   }
 
-  // Resolve user from whichever store is active
   const user = await findUserByEmail(email);
 
-  // Intrusion Check 1: User does not exist
   if (!user) {
     if (portal !== 'customer') {
       reportSecurityAlert(portal, email, 'NON_EXISTENT_USER');
@@ -164,7 +133,6 @@ export const login = async (req, res) => {
     });
   }
 
-  // Intrusion Check 2: Password mismatch
   const isMatch = bcrypt.compareSync(password, user.passwordHash);
   if (!isMatch) {
     if (portal !== 'customer') {
@@ -176,7 +144,6 @@ export const login = async (req, res) => {
     });
   }
 
-  // Intrusion Check 3: Portal Role verification
   const portalRoles = {
     customer: ['customer'],
     dealer: ['dealer'],
@@ -193,16 +160,11 @@ export const login = async (req, res) => {
     });
   }
 
-  // Ensure user has a unique delivery PIN (patch in-memory; MongoDB users keep theirs)
   if (!user.deliveryPin) {
     user.deliveryPin = generateUniqueDeliveryPin();
-    if (isUsingMongo()) {
-      const usersCol = getMongoCollection('users');
-      await usersCol.updateOne({ id: user.id }, { $set: { deliveryPin: user.deliveryPin } });
-    }
+    syncDbToR2();
   }
 
-  // All portals: direct login with token
   const token = generateToken({ id: user.id, role: user.role, email: user.email });
   const { passwordHash: _, ...userWithoutPassword } = user;
 
@@ -216,17 +178,13 @@ export const login = async (req, res) => {
 
 /**
  * GET /api/auth/delivery-pin
- * Returns the authenticated customer's delivery verification PIN.
  */
 export const getDeliveryPin = async (req, res) => {
   const user = await findUserById(req.user.id) || req.user;
 
   if (!user.deliveryPin) {
     user.deliveryPin = generateUniqueDeliveryPin();
-    if (isUsingMongo()) {
-      const usersCol = getMongoCollection('users');
-      await usersCol.updateOne({ id: user.id }, { $set: { deliveryPin: user.deliveryPin } });
-    }
+    syncDbToR2();
   }
 
   return res.json({
@@ -244,7 +202,6 @@ export const getProfile = async (req, res) => {
 
   const { passwordHash, ...userWithoutPassword } = user;
 
-  // Merge with extended profile from MongoDB
   try {
     const extendedProfile = await getUserProfile(req.user.id);
     if (extendedProfile) {
@@ -254,7 +211,6 @@ export const getProfile = async (req, res) => {
       userWithoutPassword.walletHistory = (extendedProfile.walletHistory || []).slice(0, 20);
     }
   } catch (err) {
-    // Profile fetch failed — return base user data
     console.error('Profile merge error:', err.message);
   }
 
@@ -267,38 +223,26 @@ export const updateProfile = async (req, res) => {
 
   const { name, phone, roomDetails, collegeId, avatarUrl, preferences, addresses } = req.body;
 
-  // Update base user fields
-  const baseUpdates = {};
-  if (name) { user.name = name; baseUpdates.name = name; }
-  if (phone) { user.phone = phone; baseUpdates.phone = phone; }
-  if (roomDetails) { user.roomDetails = roomDetails; baseUpdates.roomDetails = roomDetails; }
-  if (collegeId) { user.collegeId = collegeId; baseUpdates.collegeId = collegeId; }
+  if (name) user.name = name;
+  if (phone) user.phone = phone;
+  if (roomDetails) user.roomDetails = roomDetails;
+  if (collegeId) user.collegeId = collegeId;
 
-  if (isUsingMongo() && Object.keys(baseUpdates).length > 0) {
-    const usersCol = getMongoCollection('users');
-    await usersCol.updateOne({ id: user.id }, { $set: baseUpdates });
-  }
-
-  // Update extended profile fields in MongoDB
   const mongoUpdates = {};
   if (avatarUrl !== undefined) mongoUpdates.avatarUrl = avatarUrl;
   if (preferences) mongoUpdates.preferences = preferences;
   if (addresses) mongoUpdates.addresses = addresses;
 
   if (Object.keys(mongoUpdates).length > 0) {
-    try {
-      await updateUserProfile(req.user.id, mongoUpdates);
-      console.log(`   👤 Extended profile updated in MongoDB for ${user.name}`);
-    } catch (err) {
-      console.error('   ⚠️ Failed to update MongoDB profile:', err.message);
-    }
+    await updateUserProfile(req.user.id, mongoUpdates);
+  } else {
+    syncDbToR2();
   }
 
   const { passwordHash: _, ...userWithoutPassword } = user;
   return res.json({ success: true, message: 'Profile updated', user: userWithoutPassword });
 };
 
-// GET /api/auth/notifications
 export const getNotifications = (req, res) => {
   const userId = req.user.id;
   const userNotifs = db.notifications.filter(n => n.userId === userId)
@@ -308,19 +252,18 @@ export const getNotifications = (req, res) => {
   return res.json({ success: true, notifications: userNotifs, unreadCount });
 };
 
-// PUT /api/auth/notifications/read
 export const markNotificationsRead = (req, res) => {
   const userId = req.user.id;
-  const { ids } = req.body; // array of notification ids, or empty to mark all
+  const { ids } = req.body;
   db.notifications.forEach(n => {
     if (n.userId === userId && (!ids || ids.includes(n.id))) {
       n.read = true;
     }
   });
+  syncDbToR2();
   return res.json({ success: true, message: 'Notifications marked as read' });
 };
 
-// POST /api/auth/notifications (create notification - used internally)
 export const createNotification = ({ userId, type, title, message }) => {
   const notif = {
     id: `ntf_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
@@ -332,5 +275,6 @@ export const createNotification = ({ userId, type, title, message }) => {
     createdAt: new Date().toISOString()
   };
   db.notifications.unshift(notif);
+  syncDbToR2();
   return notif;
 };

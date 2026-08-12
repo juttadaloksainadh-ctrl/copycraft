@@ -380,6 +380,24 @@ export const db = {
       read: true,
       createdAt: '2026-08-06T08:30:00Z'
     }
-  ]
+  ],
+
+  userProfiles: [],
+  paymentReceipts: []
 };
+
+import { saveDatabaseToR2 } from '../services/r2Storage.js';
+
+let syncDebounceTimer = null;
+
+/**
+ * Persist in-memory database to Cloudflare R2 asynchronously.
+ */
+export function syncDbToR2() {
+  if (syncDebounceTimer) clearTimeout(syncDebounceTimer);
+  syncDebounceTimer = setTimeout(() => {
+    saveDatabaseToR2(db).catch(err => console.error('R2 sync failed:', err.message));
+  }, 300);
+}
+
 

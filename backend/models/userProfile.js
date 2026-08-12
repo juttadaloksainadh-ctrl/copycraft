@@ -1,39 +1,10 @@
 /**
- * CopyCraft — User Profile MongoDB Model
- * ----------------------------------------
- * Extended user profile data stored in MongoDB.
- * The base user record (id, email, passwordHash, role) lives in the main
- * users collection/store. This model stores rich profile extensions:
- * avatar, preferences, addresses, wallet history.
- *
- * Collection: userProfiles
- *
- * {
- *   _id:          ObjectId (auto),
- *   userId:       String  — Reference to user ID in users collection
- *   avatarUrl:    String  — URL to profile picture (stored in R2 or external)
- *   preferences: {
- *     theme:          String — 'light' | 'dark' | 'system'
- *     language:       String — 'en' | 'hi' | 'te' etc.
- *     defaultPrint: {
- *       printMode:    String — 'bw' | 'color'
- *       sideMode:     String — 'single' | 'double'
- *       paperSize:    String — 'A4' | 'A3' | 'Letter'
- *       binding:      String — 'none' | 'spiral' | 'softcover' | 'hardcover'
- *     }
- *   },
- *   addresses: [
- *     { label, hostel, room, landmark, isDefault }
- *   ],
- *   walletHistory: [
- *     { type: 'credit'|'debit', amount, reason, timestamp }
- *   ],
- *   createdAt:    Date,
- *   updatedAt:    Date
- * }
+ * CopyCraft — User Profile Model (Cloudflare R2 Persistent Engine)
+ * -----------------------------------------------------------------
+ * Extended user profile data stored in dbStore and synced to R2.
  */
 
-import { getMongoCollection } from '../config/db.js';
+import { db as dbStore, syncDbToR2 } from './dbStore.js';
 
 /** Default preferences for new users */
 const DEFAULT_PREFERENCES = {
@@ -47,139 +18,96 @@ const DEFAULT_PREFERENCES = {
   },
 };
 
+if (!dbStore.userProfiles) {
+  dbStore.userProfiles = [];
+}
+
 /**
- * Create a new user profile in MongoDB.
- *
- * @param {string} userId - The user's ID from the users collection
- * @param {object} initialData - Optional initial profile data
- * @returns {Promise<object>} The created profile
+ * Create a new user profile.
  */
 export async function createUserProfile(userId, initialData = {}) {
-  const collection = getMongoCollection('userProfiles');
-  if (!collection) {
-    console.log('[UserProfile] MongoDB not available — profile not persisted');
-    return { userId, ...DEFAULT_PREFERENCES, _fallback: true };
+  let profile = dbStore.userProfiles.find(p => p.userId === userId);
+
+  if (!profile) {
+    profile = {
+      userId,
+      avatarUrl: initialData.avatarUrl || '',
+      preferences: { ...DEFAULT_PREFERENCES, ...(initialData.preferences || {}) },
+      addresses: initialData.addresses || [],
+      walletHistory: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    dbStore.userProfiles.push(profile);
+    syncDbToR2();
   }
 
-  const profile = {
-    userId,
-    avatarUrl: initialData.avatarUrl || '',
-    preferences: { ...DEFAULT_PREFERENCES, ...(initialData.preferences || {}) },
-    addresses: initialData.addresses || [],
-    walletHistory: [],
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
-
-  const result = await collection.insertOne(profile);
-  return { ...profile, _id: result.insertedId };
+  return profile;
 }
 
 /**
  * Get a user's extended profile by user ID.
- *
- * @param {string} userId - The user ID
- * @returns {Promise<object|null>}
  */
 export async function getUserProfile(userId) {
-  const collection = getMongoCollection('userProfiles');
-  if (!collection) return null;
-
-  return collection.findOne({ userId });
+  let profile = dbStore.userProfiles.find(p => p.userId === userId);
+  if (!profile) {
+    profile = await createUserProfile(userId);
+  }
+  return profile;
 }
 
 /**
  * Update a user's profile fields.
- *
- * @param {string} userId - The user ID
- * @param {object} updates - Fields to update (avatarUrl, preferences, addresses)
- * @returns {Promise<object|null>} The updated profile
  */
 export async function updateUserProfile(userId, updates) {
-  const collection = getMongoCollection('userProfiles');
-  if (!collection) return null;
+  let profile = await getUserProfile(userId);
 
-  // Build $set payload — supports nested preference updates
-  const setPayload = { updatedAt: new Date() };
-
-  if (updates.avatarUrl !== undefined) setPayload.avatarUrl = updates.avatarUrl;
+  if (updates.avatarUrl !== undefined) profile.avatarUrl = updates.avatarUrl;
   if (updates.preferences) {
-    // Merge preferences instead of replacing
-    for (const [key, value] of Object.entries(updates.preferences)) {
-      setPayload[`preferences.${key}`] = value;
-    }
+    profile.preferences = { ...profile.preferences, ...updates.preferences };
   }
-  if (updates.addresses !== undefined) setPayload.addresses = updates.addresses;
+  if (updates.addresses !== undefined) profile.addresses = updates.addresses;
 
-  const result = await collection.findOneAndUpdate(
-    { userId },
-    { $set: setPayload },
-    { returnDocument: 'after', upsert: true }
-  );
+  profile.updatedAt = new Date().toISOString();
+  syncDbToR2();
 
-  return result;
+  return profile;
 }
 
 /**
  * Add an address to the user's address list.
- *
- * @param {string} userId - The user ID
- * @param {object} address - { label, hostel, room, landmark, isDefault }
- * @returns {Promise<object|null>}
  */
 export async function addUserAddress(userId, address) {
-  const collection = getMongoCollection('userProfiles');
-  if (!collection) return null;
+  const profile = await getUserProfile(userId);
 
-  // If isDefault, unset other defaults first
   if (address.isDefault) {
-    await collection.updateOne(
-      { userId },
-      { $set: { 'addresses.$[].isDefault': false } }
-    );
+    profile.addresses.forEach(a => { a.isDefault = false; });
   }
 
-  const result = await collection.findOneAndUpdate(
-    { userId },
-    {
-      $push: { addresses: { id: `addr_${Date.now()}`, ...address } },
-      $set: { updatedAt: new Date() }
-    },
-    { returnDocument: 'after', upsert: true }
-  );
+  profile.addresses.push({ id: `addr_${Date.now()}`, ...address });
+  profile.updatedAt = new Date().toISOString();
+  syncDbToR2();
 
-  return result;
+  return profile;
 }
 
 /**
  * Add a wallet transaction to history.
- *
- * @param {string} userId - The user ID
- * @param {string} type - 'credit' or 'debit'
- * @param {number} amount - Transaction amount
- * @param {string} reason - Description
- * @returns {Promise<object|null>}
  */
 export async function addWalletTransaction(userId, type, amount, reason) {
-  const collection = getMongoCollection('userProfiles');
-  if (!collection) return null;
+  const profile = await getUserProfile(userId);
 
   const transaction = {
     id: `txn_${Date.now()}`,
     type,
     amount,
     reason,
-    timestamp: new Date(),
+    timestamp: new Date().toISOString(),
   };
 
-  const result = await collection.findOneAndUpdate(
-    { userId },
-    {
-      $push: { walletHistory: { $each: [transaction], $position: 0 } },
-      $set: { updatedAt: new Date() }
-    },
-    { returnDocument: 'after' }
-  );
+  profile.walletHistory.unshift(transaction);
+  profile.updatedAt = new Date().toISOString();
+  syncDbToR2();
 
-  return result;
+  return profile;
 }

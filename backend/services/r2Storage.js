@@ -205,3 +205,49 @@ export function generateFileKey(orderId, fileId, originalName) {
   const sanitized = originalName.replace(/[^a-zA-Z0-9._-]/g, '_');
   return `orders/${orderId}/${fileId}_${sanitized}`;
 }
+
+const DB_KEY = 'data/app_database.json';
+
+/**
+ * Load the complete JSON application database from Cloudflare R2.
+ * @returns {Promise<object|null>} The database payload or null if not found
+ */
+export async function loadDatabaseFromR2() {
+  if (!isR2Configured()) return null;
+
+  try {
+    const command = new GetObjectCommand({
+      Bucket: R2_BUCKET_NAME,
+      Key: DB_KEY,
+    });
+    const response = await s3Client.send(command);
+    const jsonText = await response.Body.transformToString('utf-8');
+    return JSON.parse(jsonText);
+  } catch (err) {
+    if (err.name !== 'NoSuchKey' && err.$metadata?.httpStatusCode !== 404) {
+      console.warn('⚠️  Could not load database from R2:', err.message);
+    }
+    return null;
+  }
+}
+
+/**
+ * Save/Persist the complete JSON application database to Cloudflare R2.
+ * @param {object} dbData - The entire in-memory database object
+ * @returns {Promise<boolean>}
+ */
+export async function saveDatabaseToR2(dbData) {
+  if (!isR2Configured()) return false;
+
+  try {
+    const jsonBuffer = Buffer.from(JSON.stringify(dbData, null, 2), 'utf-8');
+    await uploadFile(jsonBuffer, DB_KEY, 'application/json', {
+      updatedAt: new Date().toISOString(),
+    });
+    return true;
+  } catch (err) {
+    console.error('❌ Failed to save database to Cloudflare R2:', err.message);
+    return false;
+  }
+}
+
