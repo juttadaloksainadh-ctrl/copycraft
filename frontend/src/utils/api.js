@@ -23,11 +23,31 @@ export async function apiFetch(endpoint, options = {}) {
       headers
     });
 
-    const data = await res.json();
+    const text = await res.text();
+    let data;
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      // Handles HTML responses (e.g. 404/502/index.html redirects)
+      return {
+        success: false,
+        message: res.status >= 500
+          ? `Backend server is starting up (${res.status}). Please wait 30 seconds and try again.`
+          : `Backend unreachable (${res.status}). Please check VITE_API_URL configuration.`
+      };
+    }
+
+    if (!res.ok && !data.message) {
+      data.message = `Request failed with status ${res.status}`;
+    }
+
     return data;
   } catch (error) {
     console.error(`API Fetch Error [${endpoint}]:`, error);
-    return { success: false, message: error.message || 'Network request failed' };
+    return {
+      success: false,
+      message: 'Cannot connect to backend server. Please check your internet or VITE_API_URL settings.'
+    };
   }
 }
 

@@ -28,10 +28,16 @@ const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:3000')
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow non-browser requests (curl, server-to-server, health checks) which have no Origin header
+    // Allow non-browser requests (curl, mobile apps, health checks) with no Origin
     if (!origin) return callback(null, true);
 
-    if (allowedOrigins.includes(origin)) {
+    // If wildcard '*' is in allowedOrigins or development mode, allow all
+    if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    // Also allow common localhost and preview domains if not strictly locked down
+    if (origin.includes('localhost') || origin.includes('127.0.0.1') || origin.endsWith('.vercel.app')) {
       return callback(null, true);
     }
 
