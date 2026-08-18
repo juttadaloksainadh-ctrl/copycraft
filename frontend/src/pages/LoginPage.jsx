@@ -1,27 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { Mail, Lock, ArrowRight, ArrowLeft } from 'lucide-react';
 
 export default function LoginPage({ onNavigate, selectedPortal = 'customer' }) {
-  const { login, switchDemoRole } = useAuth();
+  const { login } = useAuth();
   const { addToast } = useToast();
 
-  // Demo accounts directory for quick click logs
-  const defaultEmails = {
-    customer: 'customer@copycraft.com',
-    dealer: 'dealer@copycraft.com',
-    distributor: 'distributor@copycraft.com',
-    admin: 'admin@copycraft.com'
-  };
+
+
 
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('Password123!');
+  const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => {
-    setEmail(defaultEmails[selectedPortal] || '');
-  }, [selectedPortal]);
+
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -43,20 +36,7 @@ export default function LoginPage({ onNavigate, selectedPortal = 'customer' }) {
     }
   };
 
-  const handleQuickDemo = async () => {
-    setIsSubmitting(true);
-    try {
-      const res = await switchDemoRole(selectedPortal);
-      if (res?.success) {
-        addToast(`Demo ${selectedPortal} access granted`, 'success');
-        onNavigate('dashboard');
-      }
-    } catch (e) {
-      addToast('Demo switch failed', 'error');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+
 
   const portalNames = {
     customer: 'Customer Portal',
@@ -67,7 +47,7 @@ export default function LoginPage({ onNavigate, selectedPortal = 'customer' }) {
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-app)', padding: '1.5rem', flexDirection: 'column', gap: '1rem' }}>
-      
+
       {/* Back to selection button */}
       <button
         onClick={() => onNavigate('portal_selection')}
@@ -136,20 +116,7 @@ export default function LoginPage({ onNavigate, selectedPortal = 'customer' }) {
           </button>
         </form>
 
-        {/* Demo Bypass Option */}
-        <div style={{ marginTop: '2rem', paddingTop: '1.25rem', borderTop: '1px solid var(--border-color)' }}>
-          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textAlign: 'center', marginBottom: '0.75rem' }}>
-            QUICK DEMO ACCREDITATION
-          </div>
-          <button
-            className="btn btn-sm btn-secondary"
-            onClick={handleQuickDemo}
-            disabled={isSubmitting}
-            style={{ width: '100%' }}
-          >
-            Pre-Seed and Sign In demo credentials
-          </button>
-        </div>
+
 
         {selectedPortal === 'customer' && (
           <div style={{ marginTop: '1.5rem', textAlign: 'center', fontSize: '0.85rem' }}>
