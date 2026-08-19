@@ -238,7 +238,7 @@ export default function ProfilePage() {
               <Building2 size={13} /> Campus / College
             </label>
             <div style={{ fontWeight: 600, fontSize: '1rem', color: 'var(--text-main)', padding: '0.4rem 0' }}>
-              {user?.collegeId === 'clg_1' ? 'IIT Bombay' : user?.collegeId === 'clg_2' ? 'BITS Pilani' : user?.collegeId === 'clg_3' ? 'Delhi University' : user?.collegeId || 'N/A'}
+              {user?.collegeName || user?.collegeId || 'N/A'}
             </div>
           </div>
 

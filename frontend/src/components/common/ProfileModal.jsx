@@ -247,7 +247,7 @@ export default function ProfileModal({ onClose }) {
                 <Building2 size={13} /> Campus / College
               </label>
               <div style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: '0.95rem', padding: '0.5rem 0' }}>
-                {user?.collegeId?.replace('clg_', 'Campus #') || 'IIT Bombay'}
+                {user?.collegeName || user?.collegeId || 'N/A'}
               </div>
             </div>
 

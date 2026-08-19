@@ -91,7 +91,7 @@ export default function CustomerDashboard({ onNavigate }) {
   const staffColumns = [
     { header: 'Staff Name', accessor: 'name', cell: row => <span style={{ fontWeight: 700 }}>{row.name}</span> },
     { header: 'Role', accessor: 'role', cell: row => <Badge status={row.role === 'dealer' ? 'ADEQUATE' : 'ASSIGNED'} /> },
-    { header: 'Campus Station', cell: row => row.collegeId === 'clg_1' ? 'IIT Bombay' : 'BITS Pilani' },
+    { header: 'Campus Station', cell: row => row.collegeName || row.collegeId || '—' },
     {
       header: 'Contact Info',
       accessor: 'phone',

@@ -9,10 +9,15 @@ export const getDealerQueue = (req, res) => {
 
   const inventoryItems = db.inventory.filter(i => i.dealerId === req.user.id || !i.dealerId);
 
+  // Resolve the actual college name for this dealer's assigned college
+  const assignedCollege = db.colleges.find(c => c.id === req.user.collegeId);
+
   return res.json({
     success: true,
     orders: dealerOrders,
-    inventory: inventoryItems
+    inventory: inventoryItems,
+    collegeName: assignedCollege ? assignedCollege.name : null,
+    collegeCity: assignedCollege ? assignedCollege.city : null
   });
 };
 

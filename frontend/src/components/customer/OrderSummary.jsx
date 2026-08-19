@@ -9,7 +9,7 @@ export default function OrderSummary({ quote, onOrderSubmit, isSubmitting }) {
   const [appliedCoupon, setAppliedCoupon] = useState(null);
   const [paymentMethod, setPaymentMethod] = useState('UPI');
   const [deliveryLocation, setDeliveryLocation] = useState('Hostel 4, Room 302');
-  const [collegeName, setCollegeName] = useState('IIT Bombay');
+  const [collegeName, setCollegeName] = useState('');
   const [yearOfStudy, setYearOfStudy] = useState('3rd Year');
   const [branch, setBranch] = useState('Computer Science');
   const [colleges, setColleges] = useState([]);
@@ -35,6 +35,7 @@ export default function OrderSummary({ quote, onOrderSubmit, isSubmitting }) {
     deliveryFee: 0,
     couponDiscount: 0,
     gstAmount: 0,
+    convenienceFee: 0,
     finalPrice: 0
   };
 
@@ -189,9 +190,30 @@ export default function OrderSummary({ quote, onOrderSubmit, isSubmitting }) {
           </div>
         )}
 
+        {/* Convenience Fee Line */}
+        {breakdown.convenienceFee > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--text-muted)' }}>
+              Convenience Fee
+              <span style={{
+                fontSize: '0.65rem',
+                fontWeight: 700,
+                padding: '0.1rem 0.35rem',
+                borderRadius: '999px',
+                background: 'rgba(245, 158, 11, 0.12)',
+                color: '#d97706',
+                letterSpacing: '0.02em'
+              }}>
+                2.6%
+              </span>
+            </span>
+            <span style={{ color: '#d97706', fontWeight: 600 }}>+ ₹{breakdown.convenienceFee.toFixed(2)}</span>
+          </div>
+        )}
+
         <div style={{
           display: 'flex',
-          justify: 'space-between',
+          justifyContent: 'space-between',
           alignItems: 'center',
           fontSize: '1.25rem',
           fontWeight: 800,

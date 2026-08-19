@@ -1,7 +1,7 @@
 /**
  * CopyCraft Dynamic Pricing Calculation Engine
  * Formula:
- * Paper Cost + Printing Cost + Colour Charges + Binding Charges + Lamination + Cover Charges + Delivery Charges + GST - Coupon - Referral Reward = Final Price
+ * Paper Cost + Printing Cost + Colour Charges + Binding Charges + Lamination + Cover Charges + Delivery Charges - Coupon - Referral Reward + Convenience Fee (2.6%) = Final Price
  */
 
 export const PRICING_DEFAULTS = {
@@ -39,7 +39,8 @@ export const PRICING_DEFAULTS = {
   },
   deliveryBaseFee: 0,
   freeDeliveryThreshold: 0,
-  gstRate: 0.0
+  gstRate: 0.0,
+  convenienceFeeRate: 0.026 // 2.6% convenience fee
 };
 
 export function calculateOrderPrice(options) {
@@ -97,8 +98,11 @@ export function calculateOrderPrice(options) {
   // GST Calculation (No GST)
   const gstAmount = 0;
 
-  // Final Total (Printing + Binding/Addons - Discounts)
-  const finalPrice = Math.round(netBeforeTax * 100) / 100;
+  // Convenience Fee: 2.6% of the net amount (after discounts)
+  const convenienceFee = Math.round(netBeforeTax * PRICING_DEFAULTS.convenienceFeeRate * 100) / 100;
+
+  // Final Total = Net Amount + Convenience Fee
+  const finalPrice = Math.round((netBeforeTax + convenienceFee) * 100) / 100;
 
   return {
     pageCount,
@@ -118,6 +122,7 @@ export function calculateOrderPrice(options) {
       referralDiscount,
       taxableAmount: netBeforeTax,
       gstAmount,
+      convenienceFee,
       finalPrice
     }
   };

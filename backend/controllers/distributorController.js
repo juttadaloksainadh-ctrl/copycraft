@@ -83,13 +83,15 @@ export const verifyDeliveryPin = (req, res) => {
 
   // PIN matched — mark order as DELIVERED and stamp exact delivery time
   const deliveredAt = new Date().toISOString();
+  const isCOD = order.paymentMethod === 'COD' || !order.paymentMethod;
+
   order.orderStatus = 'DELIVERED';
-  order.paymentStatus = 'PAID';
+  order.paymentStatus = 'PAID'; // COD: cash collected on delivery; Online: already paid
   order.deliveredAt = deliveredAt; // ← 48h file cleanup timer starts from this moment
   order.timeline.push({
     status: 'DELIVERED',
     time: deliveredAt,
-    note: `Delivered and PIN verified by distributor ${req.user.name}. Files scheduled for permanent deletion in 48h.`
+    note: `Delivered and PIN verified by distributor ${req.user.name}. Payment: ${isCOD ? 'Cash collected on delivery (COD)' : `Online (${order.paymentMethod}) — pre-paid`}. Files scheduled for permanent deletion in 48h.`
   });
 
   db.auditLogs.unshift({
@@ -97,16 +99,18 @@ export const verifyDeliveryPin = (req, res) => {
     userId: req.user.id,
     userName: req.user.name,
     action: 'DELIVERY_PIN_VERIFIED',
-    details: `Distributor verified delivery PIN for order ${order.id} (customer: ${customer.name}). Files will be auto-deleted at ${new Date(Date.now() + 48 * 3600000).toISOString()}.`,
+    details: `Distributor verified delivery PIN for order ${order.id} (customer: ${customer.name}). Payment method: ${order.paymentMethod || 'COD'}. Files will be auto-deleted at ${new Date(Date.now() + 48 * 3600000).toISOString()}.`,
     timestamp: deliveredAt
   });
 
-  console.log(`   📦 Order ${order.id} DELIVERED by distributor ${req.user.name} — R2 files will be purged 48h from now (${new Date(Date.now() + 48 * 3600000).toLocaleString()})`);
+  console.log(`   📦 Order ${order.id} DELIVERED by distributor ${req.user.name} [${order.paymentMethod || 'COD'}] — R2 files will be purged 48h from now (${new Date(Date.now() + 48 * 3600000).toLocaleString()})`);
 
   return res.json({
     success: true,
-    message: 'Delivery PIN verified! Order successfully delivered. Customer files will be permanently deleted in 48 hours.',
+    message: `Delivery PIN verified! Order successfully delivered. ${isCOD ? 'Cash on delivery collected.' : 'Online payment was pre-confirmed.'} Customer files will be permanently deleted in 48 hours.`,
     order,
+    paymentMethod: order.paymentMethod || 'COD',
+    paymentStatus: order.paymentStatus,
     fileDeletionScheduledAt: new Date(Date.now() + 48 * 3600000).toISOString()
   });
 };

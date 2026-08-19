@@ -1,5 +1,6 @@
-import { db } from '../models/dbStore.js';
+import { db, syncDbToR2 } from '../models/dbStore.js';
 import { PRICING_DEFAULTS } from '../services/pricingService.js';
+import { isUsingMongo, getMongoCollection } from '../config/db.js';
 import bcrypt from 'bcryptjs';
 
 export const getAdminAnalytics = (req, res) => {
@@ -12,32 +13,49 @@ export const getAdminAnalytics = (req, res) => {
   const totalDealers = users.filter(u => u.role === 'dealer').length;
   const totalDistributors = users.filter(u => u.role === 'distributor').length;
 
-  const revenueChartData = [
-    { label: 'Jan', revenue: 42000, orders: 410 },
-    { label: 'Feb', revenue: 58000, orders: 590 },
-    { label: 'Mar', revenue: 64000, orders: 670 },
-    { label: 'Apr', revenue: 72000, orders: 740 },
-    { label: 'May', revenue: 89000, orders: 920 },
-    { label: 'Jun', revenue: 95000, orders: 1050 },
-    { label: 'Jul', revenue: 112000, orders: 1240 },
-    { label: 'Aug', revenue: Math.round(totalRevenue + 120000), orders: orders.length + 1300 }
-  ];
+  // Build real monthly revenue chart data based on actual orders
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const now = new Date();
+  const revenueChartData = [];
 
-  const collegePerformance = colleges.map(c => ({
-    name: c.name,
-    city: c.city,
-    orders: orders.filter(o => o.collegeId === c.id).length + c.totalOrders,
-    dealers: c.activeDealers
-  }));
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const mName = monthNames[d.getMonth()];
+    const mYear = d.getFullYear();
+    const mMonth = d.getMonth();
+
+    const mOrders = orders.filter(o => {
+      const orderDate = new Date(o.createdAt || o.timeline?.[0]?.time || Date.now());
+      return orderDate.getMonth() === mMonth && orderDate.getFullYear() === mYear;
+    });
+
+    const mRev = mOrders.reduce((sum, o) => sum + (o.pricing?.finalPrice || 0), 0);
+    revenueChartData.push({
+      label: `${mName}`,
+      revenue: Math.round(mRev),
+      orders: mOrders.length
+    });
+  }
+
+  const collegePerformance = colleges.map(c => {
+    const clgOrders = orders.filter(o => o.collegeId === c.id);
+    const clgDealers = users.filter(u => u.role === 'dealer' && u.collegeId === c.id);
+    return {
+      name: c.name,
+      city: c.city,
+      orders: clgOrders.length,
+      dealers: clgDealers.length
+    };
+  });
 
   const lowStockAlerts = db.inventory.filter(i => i.status === 'LOW_STOCK' || i.status === 'CRITICAL');
 
   return res.json({
     success: true,
     metrics: {
-      totalRevenue: Math.round(totalRevenue + 556000),
-      totalOrders: orders.length + 4550,
-      totalCustomers: totalCustomers + 2300,
+      totalRevenue: Math.round(totalRevenue),
+      totalOrders: orders.length,
+      totalCustomers: totalCustomers,
       totalDealers,
       totalDistributors,
       totalColleges: colleges.length,
@@ -49,7 +67,7 @@ export const getAdminAnalytics = (req, res) => {
     },
     recentOrders: orders.slice(0, 10),
     lowStockAlerts,
-    auditLogs: db.auditLogs.slice(0, 15)
+    auditLogs: db.auditLogs.slice(0, 20)
   });
 };
 
@@ -58,7 +76,7 @@ export const getAllUsers = (req, res) => {
   return res.json({ success: true, users: sanitizedUsers });
 };
 
-export const createCoupon = (req, res) => {
+export const createCoupon = async (req, res) => {
   const { code, discountPercentage, maxDiscount, minOrderValue, expiryDate } = req.body;
 
   if (!code || !discountPercentage) {
@@ -77,6 +95,15 @@ export const createCoupon = (req, res) => {
 
   db.coupons.push(newCoupon);
 
+  if (isUsingMongo()) {
+    try {
+      const col = getMongoCollection('coupons');
+      await col.insertOne(newCoupon);
+    } catch (e) {
+      console.error('Mongo coupon insert error:', e.message);
+    }
+  }
+
   db.auditLogs.unshift({
     id: `log_${Date.now()}`,
     userId: req.user.id,
@@ -86,6 +113,8 @@ export const createCoupon = (req, res) => {
     timestamp: new Date().toISOString()
   });
 
+  syncDbToR2();
+
   return res.status(201).json({ success: true, message: 'Coupon created successfully', coupon: newCoupon });
 };
 
@@ -94,11 +123,15 @@ export const getCoupons = (req, res) => {
 };
 
 export const updatePricingDefaults = (req, res) => {
-  const { printMode, binding, lamination } = req.body;
+  const { printMode, binding, lamination, paperBase, sideMode } = req.body;
 
   if (printMode) Object.assign(PRICING_DEFAULTS.printMode, printMode);
   if (binding) Object.assign(PRICING_DEFAULTS.binding, binding);
   if (lamination) Object.assign(PRICING_DEFAULTS.lamination, lamination);
+  if (paperBase) Object.assign(PRICING_DEFAULTS.paperBase, paperBase);
+  if (sideMode) Object.assign(PRICING_DEFAULTS.sideMode, sideMode);
+
+  db.pricingDefaults = JSON.parse(JSON.stringify(PRICING_DEFAULTS));
 
   db.auditLogs.unshift({
     id: `log_${Date.now()}`,
@@ -109,6 +142,8 @@ export const updatePricingDefaults = (req, res) => {
     timestamp: new Date().toISOString()
   });
 
+  syncDbToR2();
+
   return res.json({ success: true, message: 'Pricing rates updated successfully', pricingDefaults: PRICING_DEFAULTS });
 };
 
@@ -116,10 +151,10 @@ export const getAuditLogs = (req, res) => {
   return res.json({ success: true, auditLogs: db.auditLogs });
 };
 
-export const createStaffAccount = (req, res) => {
+export const createStaffAccount = async (req, res) => {
   const { name, email, password, phone, role, collegeId } = req.body;
-  if (!name || !email || !password || !role || !collegeId) {
-    return res.status(400).json({ success: false, message: 'All staff profile fields are required' });
+  if (!name || !email || !password || !role) {
+    return res.status(400).json({ success: false, message: 'Staff name, email, password, and role are required' });
   }
   const exists = db.users.find(u => u.email.toLowerCase() === email.toLowerCase());
   if (exists) {
@@ -136,25 +171,36 @@ export const createStaffAccount = (req, res) => {
     name,
     phone: phone || '+91 98000 00000',
     role, // 'dealer' | 'distributor'
-    collegeId,
+    collegeId: collegeId || '',
     createdAt: new Date().toISOString()
   };
 
   db.users.push(newStaff);
+
+  if (isUsingMongo()) {
+    try {
+      const col = getMongoCollection('users');
+      await col.insertOne(newStaff);
+    } catch (e) {
+      console.error('Mongo user insert error:', e.message);
+    }
+  }
 
   db.auditLogs.unshift({
     id: `log_${Date.now()}`,
     userId: req.user.id,
     userName: req.user.name,
     action: 'STAFF_CREATE',
-    details: `Created new staff account for ${name} (${role}) assigned to ${collegeId}`,
+    details: `Created new staff account for ${name} (${role}) assigned to ${collegeId || 'Central Hub'}`,
     timestamp: new Date().toISOString()
   });
+
+  syncDbToR2();
 
   return res.status(201).json({ success: true, message: `${role.toUpperCase()} account created successfully`, user: { id: newStaff.id, name, email, role } });
 };
 
-export const deleteStaffAccount = (req, res) => {
+export const deleteStaffAccount = async (req, res) => {
   const { id } = req.params;
   const userIndex = db.users.findIndex(u => u.id === id);
 
@@ -169,6 +215,15 @@ export const deleteStaffAccount = (req, res) => {
 
   db.users.splice(userIndex, 1);
 
+  if (isUsingMongo()) {
+    try {
+      const col = getMongoCollection('users');
+      await col.deleteOne({ id });
+    } catch (e) {
+      console.error('Mongo user delete error:', e.message);
+    }
+  }
+
   db.auditLogs.unshift({
     id: `log_${Date.now()}`,
     userId: req.user.id,
@@ -178,10 +233,12 @@ export const deleteStaffAccount = (req, res) => {
     timestamp: new Date().toISOString()
   });
 
+  syncDbToR2();
+
   return res.json({ success: true, message: 'Staff account deleted permanently' });
 };
 
-export const createCollege = (req, res) => {
+export const createCollege = async (req, res) => {
   const { name, code, city, deliveryLocations } = req.body;
   if (!name || !code || !city) {
     return res.status(400).json({ success: false, message: 'College name, code, and city are required' });
@@ -191,11 +248,19 @@ export const createCollege = (req, res) => {
     name,
     code: code.toUpperCase(),
     city,
-    activeDealers: 0,
-    totalOrders: 0,
     deliveryLocations: deliveryLocations || ['Campus Main Hub']
   };
   db.colleges.push(newCollege);
+
+  if (isUsingMongo()) {
+    try {
+      const col = getMongoCollection('colleges');
+      await col.insertOne(newCollege);
+    } catch (e) {
+      console.error('Mongo college insert error:', e.message);
+    }
+  }
+
   db.auditLogs.unshift({
     id: `log_${Date.now()}`,
     userId: req.user.id,
@@ -204,10 +269,13 @@ export const createCollege = (req, res) => {
     details: `Added new college ${name} (${code}) in ${city} to availability list`,
     timestamp: new Date().toISOString()
   });
+
+  syncDbToR2();
+
   return res.status(201).json({ success: true, message: 'College added successfully', college: newCollege });
 };
 
-export const updateCollege = (req, res) => {
+export const updateCollege = async (req, res) => {
   const { id } = req.params;
   const { name, code, city, deliveryLocations } = req.body;
   const college = db.colleges.find(c => c.id === id);
@@ -219,6 +287,15 @@ export const updateCollege = (req, res) => {
   if (city) college.city = city;
   if (deliveryLocations) college.deliveryLocations = deliveryLocations;
 
+  if (isUsingMongo()) {
+    try {
+      const col = getMongoCollection('colleges');
+      await col.updateOne({ id }, { $set: { name: college.name, code: college.code, city: college.city, deliveryLocations: college.deliveryLocations } });
+    } catch (e) {
+      console.error('Mongo college update error:', e.message);
+    }
+  }
+
   db.auditLogs.unshift({
     id: `log_${Date.now()}`,
     userId: req.user.id,
@@ -227,16 +304,29 @@ export const updateCollege = (req, res) => {
     details: `Updated college details for ${college.name}`,
     timestamp: new Date().toISOString()
   });
+
+  syncDbToR2();
+
   return res.json({ success: true, message: 'College details updated successfully', college });
 };
 
-export const deleteCollege = (req, res) => {
+export const deleteCollege = async (req, res) => {
   const { id } = req.params;
   const idx = db.colleges.findIndex(c => c.id === id);
   if (idx === -1) {
     return res.status(404).json({ success: false, message: 'College not found' });
   }
   const removed = db.colleges.splice(idx, 1)[0];
+
+  if (isUsingMongo()) {
+    try {
+      const col = getMongoCollection('colleges');
+      await col.deleteOne({ id });
+    } catch (e) {
+      console.error('Mongo college delete error:', e.message);
+    }
+  }
+
   db.auditLogs.unshift({
     id: `log_${Date.now()}`,
     userId: req.user.id,
@@ -245,5 +335,9 @@ export const deleteCollege = (req, res) => {
     details: `Deleted college ${removed.name} from availability list`,
     timestamp: new Date().toISOString()
   });
+
+  syncDbToR2();
+
   return res.json({ success: true, message: 'College deleted successfully' });
 };
+

@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { apiFetch } from '../../utils/api';
 import { useLanguage } from '../../context/LanguageContext';
 import {
   LayoutDashboard,
@@ -24,6 +25,18 @@ export default function Sidebar({ activeTab, setActiveTab }) {
   const { user } = useAuth();
   const { t } = useLanguage();
   const role = user ? user.role : 'customer';
+  const [hubCollegeName, setHubCollegeName] = useState('');
+
+  useEffect(() => {
+    if (user?.collegeId) {
+      apiFetch('/orders/colleges').then(res => {
+        if (res.success) {
+          const found = res.colleges?.find(c => c.id === user.collegeId);
+          if (found) setHubCollegeName(found.name);
+        }
+      }).catch(() => {});
+    }
+  }, [user?.collegeId]);
 
   // Navigation schema per role
   const navItemsByRole = {
@@ -137,11 +150,11 @@ export default function Sidebar({ activeTab, setActiveTab }) {
       <div className="card" style={{ padding: '0.85rem', background: 'var(--bg-app)', marginTop: '2rem' }}>
         <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>CURRENT HUB</div>
         <div style={{ fontSize: '0.9rem', fontWeight: 700, marginTop: '0.2rem', color: 'var(--text-main)' }}>
-          IIT Bombay Campus
+          {hubCollegeName || (user?.name ? `${user.name}'s Campus` : 'Campus Hub')}
         </div>
         <div style={{ fontSize: '0.75rem', color: 'var(--success)', display: 'flex', alignItems: 'center', gap: '0.3rem', marginTop: '0.3rem' }}>
           <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--success)' }} />
-          Dealers Online (4/4)
+          System Online
         </div>
       </div>
     </aside>

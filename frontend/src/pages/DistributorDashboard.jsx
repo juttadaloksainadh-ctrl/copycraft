@@ -9,7 +9,7 @@ import DataTable from '../components/common/DataTable';
 import Modal from '../components/common/Modal';
 import Badge from '../components/common/Badge';
 import ProfilePage from '../components/common/ProfilePage';
-import { Truck, Building2, Users, DollarSign, UserCheck, RefreshCw, Phone, ShieldCheck } from 'lucide-react';
+import { Truck, Building2, Users, DollarSign, UserCheck, RefreshCw, Phone, ShieldCheck, CreditCard, Banknote } from 'lucide-react';
 
 export default function DistributorDashboard() {
   const { user } = useAuth();
@@ -67,13 +67,19 @@ export default function DistributorDashboard() {
 
   const dealerColumns = [
     { header: 'Dealer Name', accessor: 'name', cell: row => <span style={{ fontWeight: 700 }}>{row.name}</span> },
-    { header: 'College Station', cell: row => row.collegeId === 'clg_1' ? 'IIT Bombay' : 'BITS Pilani' },
+    {
+      header: 'College Station',
+      cell: row => {
+        const college = data?.collegeStats?.find(c => c.id === row.collegeId);
+        return college ? college.name : (row.collegeId || 'Unassigned');
+      }
+    },
     {
       header: 'Contact Number',
       accessor: 'phone',
       cell: row => (
         <a href={`tel:${row.phone}`} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: 'var(--primary)', fontWeight: 600, textDecoration: 'none' }}>
-          <Phone size={14} /> {row.phone || '+91 97222 33344'}
+          <Phone size={14} /> {row.phone || 'N/A'}
         </a>
       )
     }
@@ -85,7 +91,7 @@ export default function DistributorDashboard() {
       header: 'Customer Details',
       cell: row => (
         <div>
-          <div style={{ fontWeight: 700 }}>{row.customerName || 'Student User'}</div>
+          <div style={{ fontWeight: 700 }}>{row.customerName || '—'}</div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{row.customerPhone || 'N/A'}</div>
         </div>
       )
@@ -94,12 +100,39 @@ export default function DistributorDashboard() {
       header: 'Academic Details',
       cell: row => (
         <div>
-          <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>{row.collegeName || 'IIT Bombay'}</div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{row.yearOfStudy || '3rd Year'} • {row.branch || 'Computer Science'}</div>
+          <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>{row.collegeName || '—'}</div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{row.yearOfStudy || '—'} • {row.branch || '—'}</div>
         </div>
       )
     },
-    { header: 'Delivery Location', accessor: 'deliveryLocation', cell: row => <span style={{ fontSize: '0.85rem' }}>{row.deliveryLocation}</span> },
+    { header: 'Delivery Location', accessor: 'deliveryLocation', cell: row => <span style={{ fontSize: '0.85rem' }}>{row.deliveryLocation || '—'}</span> },
+    {
+      header: 'Payment Method',
+      cell: row => {
+        const isCOD = row.paymentMethod === 'COD' || !row.paymentMethod;
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.3rem',
+              padding: '0.2rem 0.55rem',
+              borderRadius: '999px',
+              fontSize: '0.75rem',
+              fontWeight: 700,
+              background: isCOD ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+              color: isCOD ? '#d97706' : '#059669'
+            }}>
+              {isCOD ? <Banknote size={12} /> : <CreditCard size={12} />}
+              {isCOD ? 'Cash on Delivery' : row.paymentMethod}
+            </div>
+            <div style={{ fontSize: '0.7rem', color: isCOD && row.paymentStatus !== 'PAID' ? '#ef4444' : 'var(--success)', fontWeight: 600 }}>
+              {row.paymentStatus === 'PAID' ? '✓ Paid' : '⏳ Collect on delivery'}
+            </div>
+          </div>
+        );
+      }
+    },
     {
       header: 'Assigned Dealer',
       cell: row => (
@@ -143,7 +176,7 @@ export default function DistributorDashboard() {
             <div>
               <span className="badge badge-primary" style={{ marginBottom: '0.3rem' }}>DISTRIBUTOR HUB</span>
               <h2 style={{ fontSize: '1.6rem', fontWeight: 800 }}>{user?.name || 'Campus Operations Center'}</h2>
-              <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>Managing IIT Bombay & Regional College Print Operations</p>
+              <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>Managing Campus Print Operations &amp; Delivery Network</p>
             </div>
             <button className="btn btn-sm btn-secondary" onClick={fetchDashboard}>
               <RefreshCw size={15} /> Sync Analytics
@@ -158,7 +191,7 @@ export default function DistributorDashboard() {
                 <div className="card">
                   <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)' }}>TOTAL COLLEGES</div>
                   <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--primary)', margin: '0.2rem 0' }}>
-                    {data?.stats?.totalColleges || 3}
+                    {loading ? '—' : (data?.stats?.totalColleges ?? 0)}
                   </div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--success)' }}>Active campus networks</div>
                 </div>
@@ -166,7 +199,7 @@ export default function DistributorDashboard() {
                 <div className="card">
                   <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)' }}>ACTIVE DEALERS</div>
                   <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--accent)', margin: '0.2rem 0' }}>
-                    {data?.stats?.activeDealers || 4}
+                    {loading ? '—' : (data?.stats?.activeDealers ?? 0)}
                   </div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--success)' }}>Hostel print hubs</div>
                 </div>
@@ -174,7 +207,7 @@ export default function DistributorDashboard() {
                 <div className="card">
                   <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)' }}>TOTAL ACTIVE ORDERS</div>
                   <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--success)', margin: '0.2rem 0' }}>
-                    {data?.stats?.totalOrders || 8} Orders
+                    {loading ? '—' : (data?.stats?.totalOrders ?? 0)} Orders
                   </div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Operations print load</div>
                 </div>
@@ -235,8 +268,13 @@ export default function DistributorDashboard() {
             <div style={{ background: 'var(--bg-app)', padding: '1rem', borderRadius: 'var(--radius-md)', fontSize: '0.85rem' }}>
               <div style={{ fontWeight: 700, marginBottom: '0.35rem' }}>Order Details</div>
               <div>Customer: {assignModalOrder?.customerName}</div>
-              <div>College: {assignModalOrder?.collegeName || 'IIT Bombay'}</div>
-              <div>Destination: {assignModalOrder?.deliveryLocation}</div>
+              <div>College: {assignModalOrder?.collegeName || '—'}</div>
+              <div>Destination: {assignModalOrder?.deliveryLocation || '—'}</div>
+              <div style={{ marginTop: '0.4rem' }}>
+                Payment: <strong style={{ color: assignModalOrder?.paymentMethod === 'COD' ? '#d97706' : '#059669' }}>
+                  {assignModalOrder?.paymentMethod === 'COD' ? '💵 Cash on Delivery' : `💳 ${assignModalOrder?.paymentMethod || 'Online'}`}
+                </strong>
+              </div>
             </div>
 
             <div className="input-group">

@@ -1,3 +1,5 @@
+import { db } from '../models/dbStore.js';
+
 /**
  * CopyCraft Dynamic Pricing Calculation Engine
  * Formula:
@@ -42,6 +44,10 @@ export const PRICING_DEFAULTS = {
   gstRate: 0.0
 };
 
+export function getPricingRates() {
+  return PRICING_DEFAULTS;
+}
+
 export function calculateOrderPrice(options) {
   const {
     pageCount = 1,
@@ -58,7 +64,7 @@ export function calculateOrderPrice(options) {
   } = options;
 
   const sizeMultiplier = PRICING_DEFAULTS.paperBase[paperSize] || 1.0;
-  const pagePrintRate = PRICING_DEFAULTS.printMode[printMode] || 1.50;
+  const pagePrintRate = PRICING_DEFAULTS.printMode[printMode] || (printMode === 'color' ? 6.00 : 1.50);
   const sideMultiplier = sideMode === 'double' ? PRICING_DEFAULTS.sideMode.double : 1.0;
 
   // Total raw print & paper cost per document
@@ -77,11 +83,18 @@ export function calculateOrderPrice(options) {
   // Delivery fee calculation (No delivery charge)
   const deliveryFee = 0;
 
-  // Coupon Discount calculation
+  // Coupon Discount calculation - dynamically check against db.coupons + built-in fallback
   let couponDiscount = 0;
   if (couponCode) {
     const codeUpper = couponCode.toUpperCase();
-    if (codeUpper === 'WELCOME10') {
+    const matchedDbCoupon = db.coupons?.find(c => c.code === codeUpper && c.active);
+    
+    if (matchedDbCoupon) {
+      if (subtotalBeforeDelivery >= (matchedDbCoupon.minOrderValue || 0)) {
+        const rawDiscount = (subtotalBeforeDelivery * matchedDbCoupon.discountPercentage) / 100;
+        couponDiscount = Math.min(matchedDbCoupon.maxDiscount || Infinity, Math.round(rawDiscount));
+      }
+    } else if (codeUpper === 'WELCOME10') {
       couponDiscount = Math.round(subtotalBeforeDelivery * 0.10);
     } else if (codeUpper === 'EXAM50') {
       couponDiscount = Math.min(50, subtotalBeforeDelivery * 0.20);
@@ -97,8 +110,12 @@ export function calculateOrderPrice(options) {
   // GST Calculation (No GST)
   const gstAmount = 0;
 
-  // Final Total (Printing + Binding/Addons - Discounts)
-  const finalPrice = Math.round(netBeforeTax * 100) / 100;
+  // Convenience Fee: 2.6% of the net amount (after discounts, before tax)
+  const CONVENIENCE_FEE_RATE = 0.026;
+  const convenienceFee = Math.round(netBeforeTax * CONVENIENCE_FEE_RATE * 100) / 100;
+
+  // Final Total = Net Amount + Convenience Fee
+  const finalPrice = Math.round((netBeforeTax + convenienceFee) * 100) / 100;
 
   return {
     pageCount,
@@ -118,6 +135,7 @@ export function calculateOrderPrice(options) {
       referralDiscount,
       taxableAmount: netBeforeTax,
       gstAmount,
+      convenienceFee,
       finalPrice
     }
   };

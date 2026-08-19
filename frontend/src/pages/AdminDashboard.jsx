@@ -297,7 +297,7 @@ export default function AdminDashboard() {
   const orderColumns = [
     { header: 'Order ID', accessor: 'id', cell: row => <span style={{ fontWeight: 700 }}>{row.id}</span> },
     { header: 'Customer', cell: row => <div><div>{row.customerName}</div><div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{row.customerPhone}</div></div> },
-    { header: 'College Campus', cell: row => row.collegeName || 'IIT Bombay' },
+    { header: 'College Campus', cell: row => row.collegeName || '—' },
     {
       header: 'Print Specifications',
       cell: row => (
@@ -369,7 +369,7 @@ export default function AdminDashboard() {
                 <div className="card">
                   <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)' }}>TOTAL REVENUE</div>
                   <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--success)', margin: '0.2rem 0' }}>
-                    ₹{analytics?.metrics?.totalRevenue.toLocaleString() || '670,000'}
+                    ₹{loading ? '—' : (analytics?.metrics?.totalRevenue?.toLocaleString() ?? 0)}
                   </div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--success)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                     <TrendingUp size={14} /> +24.8% Month Over Month
@@ -379,7 +379,7 @@ export default function AdminDashboard() {
                 <div className="card">
                   <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)' }}>TOTAL ORDERS</div>
                   <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--primary)', margin: '0.2rem 0' }}>
-                    {analytics?.metrics?.totalOrders.toLocaleString() || '4,550'}
+                    {loading ? '—' : (analytics?.metrics?.totalOrders?.toLocaleString() ?? 0)}
                   </div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Processed across active campuses</div>
                 </div>
@@ -387,7 +387,7 @@ export default function AdminDashboard() {
                 <div className="card">
                   <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)' }}>TOTAL CUSTOMERS</div>
                   <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--accent)', margin: '0.2rem 0' }}>
-                    {analytics?.metrics?.totalCustomers.toLocaleString() || '2,300'}
+                    {loading ? '—' : (analytics?.metrics?.totalCustomers?.toLocaleString() ?? 0)}
                   </div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Active student accounts</div>
                 </div>
@@ -395,7 +395,7 @@ export default function AdminDashboard() {
                 <div className="card">
                   <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)' }}>STOCK ALERTS</div>
                   <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--warning)', margin: '0.2rem 0' }}>
-                    {analytics?.metrics?.lowStockCount || 2}
+                    {loading ? '—' : (analytics?.metrics?.lowStockCount ?? 0)}
                   </div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--warning)' }}>Requires dealer restocking</div>
                 </div>

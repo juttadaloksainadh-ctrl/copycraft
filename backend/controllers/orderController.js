@@ -1,9 +1,14 @@
-import { calculateOrderPrice } from '../services/pricingService.js';
+import { calculateOrderPrice, PRICING_DEFAULTS } from '../services/pricingService.js';
 import { extractFileMetadata } from '../services/pdfService.js';
 import { analyzeDocumentAI } from '../services/aiService.js';
 import { isR2Configured, uploadFile, generateFileKey } from '../services/r2Storage.js';
 import { createPaymentReceipt } from '../models/paymentReceipt.js';
-import { db } from '../models/dbStore.js';
+import { db, syncDbToR2 } from '../models/dbStore.js';
+import { isUsingMongo, getMongoCollection } from '../config/db.js';
+
+export const getPricingRatesHandler = (req, res) => {
+  return res.json({ success: true, pricingRates: PRICING_DEFAULTS });
+};
 
 export const calculateQuote = (req, res) => {
   const options = req.body;
@@ -75,8 +80,7 @@ export const uploadAndAnalyzeFiles = async (req, res) => {
   }
 };
 
-
-export const createOrder = (req, res) => {
+export const createOrder = async (req, res) => {
   const {
     files,
     collegeId,
@@ -84,20 +88,23 @@ export const createOrder = (req, res) => {
     paymentMethod = 'COD',
     couponCode = null,
     referralDiscount = 0,
-    collegeName = 'IIT Bombay',
-    yearOfStudy = '3rd Year',
-    branch = 'Computer Science'
+    collegeName = '',
+    yearOfStudy = '',
+    branch = ''
   } = req.body;
 
   if (!files || files.length === 0) {
     return res.status(400).json({ success: false, message: 'At least one document file is required' });
   }
 
-  const matchedCollege = db.colleges.find(c => c.name.toLowerCase() === collegeName.toLowerCase());
-  const finalCollegeId = matchedCollege ? matchedCollege.id : (collegeId || req.user.collegeId || 'clg_1');
+  const matchedCollege = db.colleges.find(c => collegeName && c.name.toLowerCase() === collegeName.toLowerCase()) ||
+                         db.colleges.find(c => collegeId && c.id === collegeId) ||
+                         db.colleges[0] || null;
+  const finalCollegeId = matchedCollege ? matchedCollege.id : (collegeId || req.user.collegeId || '');
+  const finalCollegeName = matchedCollege ? matchedCollege.name : (collegeName || 'Campus Station');
 
   // Find assigned dealer for this college
-  const dealer = db.users.find(u => u.role === 'dealer' && u.collegeId === finalCollegeId) || db.users.find(u => u.role === 'dealer');
+  const dealer = db.users.find(u => u.role === 'dealer' && u.collegeId === finalCollegeId) || db.users.find(u => u.role === 'dealer') || null;
   const distributor = db.users.find(u => u.role === 'distributor' && u.collegeId === finalCollegeId) || db.users.find(u => u.role === 'distributor') || null;
 
   // Calculate pricing aggregate for all files
@@ -139,16 +146,16 @@ export const createOrder = (req, res) => {
     customerName: req.user.name,
     customerPhone: req.user.phone,
     collegeId: finalCollegeId,
-    collegeName,
-    yearOfStudy,
-    branch,
+    collegeName: finalCollegeName,
+    yearOfStudy: yearOfStudy || 'Student',
+    branch: branch || 'General',
     deliveryLocation: deliveryLocation || req.user.roomDetails || 'Campus Hub',
-    dealerId: dealer ? dealer.id : 'usr_dealer_1',
-    dealerName: dealer ? dealer.name : 'Central Campus Dealer',
-    dealerPhone: dealer ? dealer.phone : '+91 97222 33344', // store dealer phone for distributor coordinating
-    distributorId: distributor ? distributor.id : 'usr_distributor_1',
-    distributorName: distributor ? distributor.name : 'Rajesh Kumar (IIT Bombay Hub)',
-    distributorPhone: distributor ? distributor.phone : '+91 98111 22233',
+    dealerId: dealer ? dealer.id : null,
+    dealerName: dealer ? dealer.name : 'Pending Assignment',
+    dealerPhone: dealer ? dealer.phone : '',
+    distributorId: distributor ? distributor.id : null,
+    distributorName: distributor ? distributor.name : 'Campus Distributor',
+    distributorPhone: distributor ? distributor.phone : '',
     files,
     pricing: aggregateQuote.breakdown,
     paymentStatus: paymentMethod === 'COD' ? 'PENDING' : 'PAID',
@@ -158,7 +165,7 @@ export const createOrder = (req, res) => {
       {
         status: 'CREATED',
         time: new Date().toISOString(),
-        note: `Order placed via ${paymentMethod}`
+        note: `Order placed via ${paymentMethod === 'COD' ? 'Cash on Delivery (COD)' : 'Online Payment (' + paymentMethod + ')'}`
       }
     ],
     createdAt: new Date().toISOString()
@@ -166,15 +173,26 @@ export const createOrder = (req, res) => {
 
   db.orders.unshift(newOrder);
 
+  if (isUsingMongo()) {
+    try {
+      const col = getMongoCollection('orders');
+      await col.insertOne(newOrder);
+    } catch (e) {
+      console.error('Mongo order insert error:', e.message);
+    }
+  }
+
   // Log action
   db.auditLogs.unshift({
     id: `log_${Date.now()}`,
     userId: req.user.id,
     userName: req.user.name,
     action: 'ORDER_CREATE',
-    details: `Created order ${orderId} for ₹${aggregateQuote.breakdown.finalPrice}`,
+    details: `Created order ${orderId} for ₹${aggregateQuote.breakdown.finalPrice} (${paymentMethod})`,
     timestamp: new Date().toISOString()
   });
+
+  syncDbToR2();
 
   // Save payment receipt to MongoDB (async, non-blocking)
   createPaymentReceipt({
@@ -253,6 +271,8 @@ export const cancelOrder = (req, res) => {
     note: 'Order cancelled by customer'
   });
 
+  syncDbToR2();
+
   return res.json({ success: true, message: 'Order cancelled successfully', order });
 };
 
@@ -273,3 +293,4 @@ export const getActiveStaffList = (req, res) => {
     }));
   return res.json({ success: true, staff });
 };
+

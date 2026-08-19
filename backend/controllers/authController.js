@@ -48,7 +48,7 @@ async function findUserById(id) {
 }
 
 export const register = async (req, res) => {
-  const { name, phone, email, password, collegeId = 'clg_1', roomDetails } = req.body;
+  const { name, phone, email, password, collegeId = '', roomDetails } = req.body;
 
   if (!name || !phone || !email || !password) {
     return res.status(400).json({ success: false, message: 'Name, phone, email and password are all required' });

@@ -17,6 +17,7 @@ export default function DealerDashboard() {
   const { addToast } = useToast();
   const [orders, setOrders] = useState([]);
   const [inventory, setInventory] = useState([]);
+  const [collegeName, setCollegeName] = useState('');
   const [selectedOrderForPin, setSelectedOrderForPin] = useState(null);
   const [activeTab, setActiveTab] = useState('queue');
   const [filterStatus, setFilterStatus] = useState('ALL');
@@ -33,6 +34,7 @@ export default function DealerDashboard() {
       if (res.success) {
         setOrders(res.orders || []);
         setInventory(res.inventory || []);
+        if (res.collegeName) setCollegeName(res.collegeName);
       }
     } catch (e) {
       addToast('Error loading dealer queue', 'error');
@@ -133,7 +135,7 @@ export default function DealerDashboard() {
             <div>
               <span className="badge badge-accent" style={{ marginBottom: '0.3rem' }}>DEALER OPERATIONAL HUB</span>
               <h2 style={{ fontSize: '1.6rem', fontWeight: 800 }}>{user?.name || 'Suresh Print Hub'}</h2>
-              <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>Hostel 12 Print Station • IIT Bombay</p>
+              <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>{collegeName ? `Campus Station • ${collegeName}` : 'Campus Print Station'}</p>
             </div>
 
             <button className="btn btn-sm btn-secondary" onClick={fetchDealerQueue} style={{ gap: '0.4rem' }}>

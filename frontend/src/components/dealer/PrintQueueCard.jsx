@@ -55,9 +55,9 @@ export default function PrintQueueCard({ order, onStatusChange, onVerifyPinClick
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', background: 'var(--bg-app)', padding: '0.75rem', borderRadius: 'var(--radius-md)', fontSize: '0.85rem' }}>
         <div>
           <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>ASSIGNED DISTRIBUTOR</div>
-          <div style={{ fontWeight: 700 }}>{order.distributorName || 'Rajesh Kumar (IIT Bombay Hub)'}</div>
+          <div style={{ fontWeight: 700 }}>{order.distributorName || 'Distributor'}</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: 'var(--primary)', marginTop: '2px' }}>
-            <Phone size={13} /> {order.distributorPhone || '+91 98111 22233'}
+            <Phone size={13} /> {order.distributorPhone || 'N/A'}
           </div>
         </div>
         <div>
