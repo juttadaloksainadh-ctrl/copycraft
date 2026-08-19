@@ -76,27 +76,30 @@ export default function AdminDashboard() {
     colorRate: 6.00,
     spiralRate: 35,
     softcoverRate: 65,
-    hardcoverRate: 130
+    hardcoverRate: 130,
+    laminationRate: 25,
+    convenienceFeeRate: 2.6
   });
 
   useEffect(() => {
     fetchAdminData();
   }, []);
 
-  const fetchAdminData = async () => {
+  const fetchAdminData = async (isManualRefresh = false) => {
     setLoading(true);
     try {
-      const [resAnalytics, resUsers, resCoupons, resLogs, resColleges] = await Promise.all([
+      const [resAnalytics, resUsers, resCoupons, resLogs, resColleges, resPricing] = await Promise.all([
         apiFetch('/admin/analytics'),
         apiFetch('/admin/users'),
         apiFetch('/admin/coupons'),
         apiFetch('/admin/audit-logs'),
-        apiFetch('/orders/colleges')
+        apiFetch('/orders/colleges'),
+        apiFetch('/orders/pricing-rates')
       ]);
 
       if (resAnalytics.success) {
         setAnalytics(resAnalytics);
-        setOrders(resAnalytics.recentOrders || []);
+        setOrders(resAnalytics.allOrders || resAnalytics.orders || resAnalytics.recentOrders || []);
       }
       if (resUsers.success) setUsersList(resUsers.users || []);
       if (resCoupons.success) setCoupons(resCoupons.coupons || []);
@@ -106,6 +109,21 @@ export default function AdminDashboard() {
         if (resColleges.colleges?.length > 0) {
           setStaffForm(prev => ({ ...prev, collegeId: resColleges.colleges[0].id }));
         }
+      }
+      if (resPricing.success && resPricing.pricingRates) {
+        const pr = resPricing.pricingRates;
+        setPricingRates({
+          bwRate: pr.printMode?.bw || 1.50,
+          colorRate: pr.printMode?.color || 6.00,
+          spiralRate: pr.binding?.spiral || 35,
+          softcoverRate: pr.binding?.softcover || 65,
+          hardcoverRate: pr.binding?.hardcover || 130,
+          laminationRate: pr.lamination?.both || 25,
+          convenienceFeeRate: Number((pr.convenienceFeeRate !== undefined ? pr.convenienceFeeRate * 100 : 2.6).toFixed(1))
+        });
+      }
+      if (isManualRefresh) {
+        addToast('Admin analytics & multi-campus orders refreshed!', 'success');
       }
     } catch (e) {
       addToast('Error fetching executive analytics', 'error');
@@ -225,11 +243,24 @@ export default function AdminDashboard() {
         method: 'PUT',
         body: JSON.stringify({
           printMode: { bw: Number(pricingRates.bwRate), color: Number(pricingRates.colorRate) },
-          binding: { spiral: Number(pricingRates.spiralRate), softcover: Number(pricingRates.softcoverRate), hardcover: Number(pricingRates.hardcoverRate) }
+          binding: {
+            spiral: Number(pricingRates.spiralRate),
+            softcover: Number(pricingRates.softcoverRate),
+            hardcover: Number(pricingRates.hardcoverRate)
+          },
+          lamination: {
+            front: Math.round(Number(pricingRates.laminationRate) * 0.6),
+            both: Number(pricingRates.laminationRate),
+            full: Math.round(Number(pricingRates.laminationRate) * 1.8)
+          },
+          convenienceFeeRate: Number(pricingRates.convenienceFeeRate) / 100
         })
       });
       if (res.success) {
-        addToast('Global pricing matrix updated successfully!', 'success');
+        addToast('Global pricing matrix updated successfully across all portals!', 'success');
+        fetchAdminData();
+      } else {
+        addToast(res.message || 'Pricing update failed', 'error');
       }
     } catch (e) {
       addToast('Failed to update pricing', 'error');
@@ -355,8 +386,9 @@ export default function AdminDashboard() {
                   <Plus size={16} /> Create Promo Coupon
                 </button>
               )}
-              <button className="btn btn-sm btn-secondary" onClick={fetchAdminData}>
-                <RefreshCw size={15} /> Sync Data
+              <button className="btn btn-sm btn-secondary" onClick={() => fetchAdminData(true)} disabled={loading} style={{ gap: '0.4rem' }}>
+                <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+                {loading ? 'Refreshing...' : 'Sync Data'}
               </button>
             </div>
           </div>
@@ -516,6 +548,37 @@ export default function AdminDashboard() {
                     className="input-field"
                     value={pricingRates.softcoverRate}
                     onChange={e => setPricingRates({ ...pricingRates, softcoverRate: e.target.value })}
+                  />
+                </div>
+
+                <div className="input-group">
+                  <label className="input-label">Hardcover Deluxe (₹)</label>
+                  <input
+                    type="number"
+                    className="input-field"
+                    value={pricingRates.hardcoverRate}
+                    onChange={e => setPricingRates({ ...pricingRates, hardcoverRate: e.target.value })}
+                  />
+                </div>
+
+                <div className="input-group">
+                  <label className="input-label">Lamination (₹ / side)</label>
+                  <input
+                    type="number"
+                    className="input-field"
+                    value={pricingRates.laminationRate}
+                    onChange={e => setPricingRates({ ...pricingRates, laminationRate: e.target.value })}
+                  />
+                </div>
+
+                <div className="input-group">
+                  <label className="input-label">Convenience Fee (%)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    className="input-field"
+                    value={pricingRates.convenienceFeeRate}
+                    onChange={e => setPricingRates({ ...pricingRates, convenienceFeeRate: e.target.value })}
                   />
                 </div>
               </div>

@@ -66,6 +66,7 @@ export const getAdminAnalytics = (req, res) => {
       collegePerformance
     },
     recentOrders: orders.slice(0, 10),
+    allOrders: orders,
     lowStockAlerts,
     auditLogs: db.auditLogs.slice(0, 20)
   });
@@ -123,13 +124,14 @@ export const getCoupons = (req, res) => {
 };
 
 export const updatePricingDefaults = (req, res) => {
-  const { printMode, binding, lamination, paperBase, sideMode } = req.body;
+  const { printMode, binding, lamination, paperBase, sideMode, convenienceFeeRate } = req.body;
 
   if (printMode) Object.assign(PRICING_DEFAULTS.printMode, printMode);
   if (binding) Object.assign(PRICING_DEFAULTS.binding, binding);
   if (lamination) Object.assign(PRICING_DEFAULTS.lamination, lamination);
   if (paperBase) Object.assign(PRICING_DEFAULTS.paperBase, paperBase);
   if (sideMode) Object.assign(PRICING_DEFAULTS.sideMode, sideMode);
+  if (convenienceFeeRate !== undefined) PRICING_DEFAULTS.convenienceFeeRate = Number(convenienceFeeRate);
 
   db.pricingDefaults = JSON.parse(JSON.stringify(PRICING_DEFAULTS));
 

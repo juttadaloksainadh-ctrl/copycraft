@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Navbar from '../components/common/Navbar';
 import Footer from '../components/common/Footer';
 import FileUploader from '../components/customer/FileUploader';
@@ -7,33 +7,14 @@ import OrderSummary from '../components/customer/OrderSummary';
 import AiSuggestionsModal from '../components/customer/AiSuggestionsModal';
 import { useToast } from '../context/ToastContext';
 import { apiFetch } from '../utils/api';
-import { calculateOrderPrice } from '../utils/pricingService';
+import { calculateOrderPrice, updateLocalPricingDefaults } from '../utils/pricingService';
 import { Sparkles, ArrowLeft } from 'lucide-react';
 
 export default function UploadPage({ onNavigate }) {
   const { addToast } = useToast();
 
-  const [files, setFiles] = useState([
-    {
-      id: 'demo_file_1',
-      name: 'Computer_Networks_Unit4_Notes.pdf',
-      size: 2450000,
-      pageCount: 18,
-      ai: {
-        blankPagesCount: 2,
-        blankPages: [7, 14],
-        suggestions: [
-          {
-            type: 'DUPLEX_SAVINGS',
-            severity: 'info',
-            title: 'Smart Duplex Recommendation',
-            message: 'Switching to Double-Sided printing for this 18-page document saves 50% paper and reduces your order cost by 15%.',
-            action: 'ENABLE_DUPLEX'
-          }
-        ]
-      }
-    }
-  ]);
+  // Initialize with clean empty file list — no default mock documents
+  const [files, setFiles] = useState([]);
 
   const [options, setOptions] = useState({
     printMode: 'bw',
@@ -47,6 +28,17 @@ export default function UploadPage({ onNavigate }) {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAiModal, setShowAiModal] = useState(false);
+
+  // Fetch latest dynamic pricing rates from backend on mount to ensure real-time admin prices apply
+  useEffect(() => {
+    apiFetch('/orders/pricing-rates')
+      .then(res => {
+        if (res.success && res.pricingRates) {
+          updateLocalPricingDefaults(res.pricingRates);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Compute aggregated quote across all uploaded files
   const totalPages = files.reduce((sum, f) => sum + (f.pageCount || 1), 0);

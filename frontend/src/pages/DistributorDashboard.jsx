@@ -24,12 +24,15 @@ export default function DistributorDashboard() {
     fetchDashboard();
   }, []);
 
-  const fetchDashboard = async () => {
+  const fetchDashboard = async (isManualRefresh = false) => {
     setLoading(true);
     try {
       const res = await apiFetch('/distributor/dashboard');
       if (res.success) {
         setData(res);
+        if (isManualRefresh) {
+          addToast('Distributor operations data refreshed!', 'success');
+        }
       }
     } catch (e) {
       addToast('Error fetching distributor dashboard', 'error');
@@ -107,6 +110,14 @@ export default function DistributorDashboard() {
     },
     { header: 'Delivery Location', accessor: 'deliveryLocation', cell: row => <span style={{ fontSize: '0.85rem' }}>{row.deliveryLocation || '—'}</span> },
     {
+      header: 'Total Amount',
+      cell: row => (
+        <span style={{ fontWeight: 800, color: 'var(--primary)', fontSize: '0.95rem' }}>
+          ₹{(row.pricing?.finalPrice || 0).toFixed(2)}
+        </span>
+      )
+    },
+    {
       header: 'Payment Method',
       cell: row => {
         const isCOD = row.paymentMethod === 'COD' || !row.paymentMethod;
@@ -172,14 +183,15 @@ export default function DistributorDashboard() {
         <Navbar />
 
         <main className="main-content" style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
             <div>
               <span className="badge badge-primary" style={{ marginBottom: '0.3rem' }}>DISTRIBUTOR HUB</span>
               <h2 style={{ fontSize: '1.6rem', fontWeight: 800 }}>{user?.name || 'Campus Operations Center'}</h2>
               <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>Managing Campus Print Operations &amp; Delivery Network</p>
             </div>
-            <button className="btn btn-sm btn-secondary" onClick={fetchDashboard}>
-              <RefreshCw size={15} /> Sync Analytics
+            <button className="btn btn-sm btn-secondary" onClick={() => fetchDashboard(true)} disabled={loading} style={{ gap: '0.4rem' }}>
+              <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+              {loading ? 'Refreshing...' : 'Sync Analytics'}
             </button>
           </div>
 
@@ -270,7 +282,10 @@ export default function DistributorDashboard() {
               <div>Customer: {assignModalOrder?.customerName}</div>
               <div>College: {assignModalOrder?.collegeName || '—'}</div>
               <div>Destination: {assignModalOrder?.deliveryLocation || '—'}</div>
-              <div style={{ marginTop: '0.4rem' }}>
+              <div style={{ marginTop: '0.25rem' }}>
+                Total Bill: <strong style={{ color: 'var(--primary)', fontSize: '0.95rem' }}>₹{(assignModalOrder?.pricing?.finalPrice || 0).toFixed(2)}</strong>
+              </div>
+              <div style={{ marginTop: '0.25rem' }}>
                 Payment: <strong style={{ color: assignModalOrder?.paymentMethod === 'COD' ? '#d97706' : '#059669' }}>
                   {assignModalOrder?.paymentMethod === 'COD' ? '💵 Cash on Delivery' : `💳 ${assignModalOrder?.paymentMethod || 'Online'}`}
                 </strong>

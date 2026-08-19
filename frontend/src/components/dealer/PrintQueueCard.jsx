@@ -1,6 +1,8 @@
-import React from 'react';
-import { Printer, Download, Phone, MapPin, CheckCircle, Package, Key, ArrowRight, FileText, Layers, BookOpen, Palette, Copy } from 'lucide-react';
+import React, { useState } from 'react';
+import { Printer, Download, Phone, MapPin, CheckCircle, Package, Key, ArrowRight, FileText, Layers, BookOpen, Palette, Copy, Loader2 } from 'lucide-react';
 import Badge from '../common/Badge';
+import { getFileDownloadUrl } from '../../utils/api';
+import { useToast } from '../../context/ToastContext';
 
 // Human-readable labels for print spec values
 const SPEC_LABELS = {
@@ -35,7 +37,39 @@ function SpecTag({ label, value, highlight = false }) {
 }
 
 export default function PrintQueueCard({ order, onStatusChange, onVerifyPinClick }) {
+  const { addToast } = useToast();
+  const [downloadingFileId, setDownloadingFileId] = useState(null);
+
   if (!order) return null;
+
+  const handleDownload = async (file) => {
+    setDownloadingFileId(file.id);
+    try {
+      const res = await getFileDownloadUrl(order.id, file.id);
+      if (res.success && res.downloadUrl) {
+        // Trigger browser download
+        const a = document.createElement('a');
+        a.href = res.downloadUrl;
+        a.download = res.fileName || file.name;
+        a.target = '_blank';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        addToast(`Downloading ${file.name}...`, 'success');
+      } else {
+        // Fallback: direct download link if available
+        if (file.r2Url) {
+          window.open(file.r2Url, '_blank');
+        } else {
+          addToast(res.message || 'File download initiated', 'info');
+        }
+      }
+    } catch (err) {
+      addToast('Error downloading file', 'error');
+    } finally {
+      setDownloadingFileId(null);
+    }
+  };
 
   return (
     <div className="card card-hover" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', borderLeft: `4px solid ${order.orderStatus === 'OUT_FOR_DELIVERY' ? 'var(--primary)' : 'var(--border-color)'}` }}>
@@ -96,15 +130,17 @@ export default function PrintQueueCard({ order, onStatusChange, onVerifyPinClick
                     ({file.pageCount} {file.pageCount === 1 ? 'page' : 'pages'})
                   </span>
                 </div>
-                <a
-                  href={`data:text/plain;charset=utf-8,${encodeURIComponent(file.name)}`}
-                  download={file.name}
+                <button
+                  type="button"
+                  onClick={() => handleDownload(file)}
+                  disabled={downloadingFileId === file.id}
                   className="btn btn-sm btn-secondary"
-                  title="Secure File Download"
+                  title="Download customer document for printing"
                   style={{ gap: '0.3rem', fontSize: '0.75rem' }}
                 >
-                  <Download size={13} /> Download
-                </a>
+                  {downloadingFileId === file.id ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+                  {downloadingFileId === file.id ? 'Fetching...' : 'Download PDF'}
+                </button>
               </div>
 
               {/* Specifications Grid */}

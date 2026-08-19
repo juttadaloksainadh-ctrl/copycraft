@@ -63,12 +63,14 @@ export function calculateOrderPrice(options) {
     collegeId = null
   } = options;
 
+  // Single side = 1 sheet per page. Both sides (double) = 2 pages printed per 1 physical paper sheet (half the pages rounded up).
+  const sheetCount = sideMode === 'double' ? Math.ceil(pageCount / 2) : pageCount;
+
   const sizeMultiplier = PRICING_DEFAULTS.paperBase[paperSize] || 1.0;
   const pagePrintRate = PRICING_DEFAULTS.printMode[printMode] || (printMode === 'color' ? 6.00 : 1.50);
-  const sideMultiplier = sideMode === 'double' ? PRICING_DEFAULTS.sideMode.double : 1.0;
 
   // Total raw print & paper cost per document
-  const rawPrintPerDoc = pageCount * pagePrintRate * sizeMultiplier * sideMultiplier;
+  const rawPrintPerDoc = sheetCount * pagePrintRate * sizeMultiplier;
   const totalPrintCost = Math.round(rawPrintPerDoc * quantity * 100) / 100;
 
   // Addons per document

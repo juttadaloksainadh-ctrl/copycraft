@@ -12,12 +12,8 @@ export const PRICING_DEFAULTS = {
     A3: 2.5
   },
   printMode: {
-    bw: 1.50, // ₹1.50 per page side
-    color: 6.00 // ₹6.00 per page side
-  },
-  sideMode: {
-    single: 1.0,
-    double: 0.85 // 15% discount on paper when duplex printing
+    bw: 1.50, // ₹1.50 per paper side / sheet
+    color: 6.00 // ₹6.00 per paper side / sheet
   },
   binding: {
     none: 0,
@@ -43,6 +39,19 @@ export const PRICING_DEFAULTS = {
   convenienceFeeRate: 0.026 // 2.6% convenience fee
 };
 
+/**
+ * Dynamically update local pricing rates matrix from backend admin settings.
+ */
+export function updateLocalPricingDefaults(newRates) {
+  if (!newRates) return;
+  if (newRates.printMode) Object.assign(PRICING_DEFAULTS.printMode, newRates.printMode);
+  if (newRates.paperBase) Object.assign(PRICING_DEFAULTS.paperBase, newRates.paperBase);
+  if (newRates.binding) Object.assign(PRICING_DEFAULTS.binding, newRates.binding);
+  if (newRates.lamination) Object.assign(PRICING_DEFAULTS.lamination, newRates.lamination);
+  if (newRates.coverSheet) Object.assign(PRICING_DEFAULTS.coverSheet, newRates.coverSheet);
+  if (newRates.convenienceFeeRate !== undefined) PRICING_DEFAULTS.convenienceFeeRate = Number(newRates.convenienceFeeRate);
+}
+
 export function calculateOrderPrice(options) {
   const {
     pageCount = 1,
@@ -58,12 +67,14 @@ export function calculateOrderPrice(options) {
     collegeId = null
   } = options;
 
+  // Single side = 1 sheet per page. Both sides (double) = 2 pages printed per 1 physical paper sheet (half the pages rounded up).
+  const sheetCount = sideMode === 'double' ? Math.ceil(pageCount / 2) : pageCount;
+
   const sizeMultiplier = PRICING_DEFAULTS.paperBase[paperSize] || 1.0;
-  const pagePrintRate = PRICING_DEFAULTS.printMode[printMode] || 1.50;
-  const sideMultiplier = sideMode === 'double' ? PRICING_DEFAULTS.sideMode.double : 1.0;
+  const pagePrintRate = PRICING_DEFAULTS.printMode[printMode] || (printMode === 'color' ? 6.00 : 1.50);
 
   // Total raw print & paper cost per document
-  const rawPrintPerDoc = pageCount * pagePrintRate * sizeMultiplier * sideMultiplier;
+  const rawPrintPerDoc = sheetCount * pagePrintRate * sizeMultiplier;
   const totalPrintCost = Math.round(rawPrintPerDoc * quantity * 100) / 100;
 
   // Addons per document
@@ -99,13 +110,14 @@ export function calculateOrderPrice(options) {
   const gstAmount = 0;
 
   // Convenience Fee: 2.6% of the net amount (after discounts)
-  const convenienceFee = Math.round(netBeforeTax * PRICING_DEFAULTS.convenienceFeeRate * 100) / 100;
+  const convenienceFee = Math.round(netBeforeTax * (PRICING_DEFAULTS.convenienceFeeRate || 0.026) * 100) / 100;
 
   // Final Total = Net Amount + Convenience Fee
   const finalPrice = Math.round((netBeforeTax + convenienceFee) * 100) / 100;
 
   return {
     pageCount,
+    sheetCount,
     quantity,
     paperSize,
     printMode,
@@ -127,3 +139,4 @@ export function calculateOrderPrice(options) {
     }
   };
 }
+

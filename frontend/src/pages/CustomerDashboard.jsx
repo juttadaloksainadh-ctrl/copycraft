@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { apiFetch } from '../utils/api';
 import Navbar from '../components/common/Navbar';
 import Sidebar from '../components/common/Sidebar';
@@ -9,17 +10,16 @@ import OrderTracker from '../components/customer/OrderTracker';
 import Modal from '../components/common/Modal';
 import DataTable from '../components/common/DataTable';
 import ProfilePage from '../components/common/ProfilePage';
-import { Printer, UploadCloud, Clock, Gift, Phone, HelpCircle, Eye, ShieldCheck, Plus, MessageSquare } from 'lucide-react';
+import { Printer, UploadCloud, Clock, Gift, Phone, HelpCircle, Eye, ShieldCheck, Plus, MessageSquare, RefreshCw } from 'lucide-react';
 
 export default function CustomerDashboard({ onNavigate }) {
   const { user } = useAuth();
+  const { addToast } = useToast();
   const [orders, setOrders] = useState([]);
   const [activeStaff, setActiveStaff] = useState([]);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [tickets, setTickets] = useState([
-    { id: 'TCK-101', subject: 'Spiral binding queries', status: 'RESOLVED', createdAt: '2026-08-05T09:00:00Z' }
-  ]);
+  const [tickets, setTickets] = useState([]);
   const [newTicketSubject, setNewTicketSubject] = useState('');
   const [showTicketModal, setShowTicketModal] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -36,13 +36,18 @@ export default function CustomerDashboard({ onNavigate }) {
     }
   }, [activeTab]);
 
-  const fetchOrders = async () => {
+  const fetchOrders = async (isManualRefresh = false) => {
+    setLoading(true);
     try {
       const res = await apiFetch('/orders/my-orders');
       if (res.success) {
         setOrders(res.orders || []);
+        if (isManualRefresh) {
+          addToast('Your order statuses are up to date!', 'success');
+        }
       }
     } catch (e) {
+      if (isManualRefresh) addToast('Failed to fetch orders', 'error');
     } finally {
       setLoading(false);
     }
@@ -125,10 +130,16 @@ export default function CustomerDashboard({ onNavigate }) {
                       Ready to print your lecture notes or assignment for campus delivery?
                     </p>
                   </div>
-                  <button className="btn btn-lg btn-primary" onClick={() => onNavigate('upload')} style={{ gap: '0.5rem' }}>
-                    <UploadCloud size={20} />
-                    Print New Document
-                  </button>
+                  <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                    <button className="btn btn-md btn-secondary" onClick={() => fetchOrders(true)} disabled={loading} style={{ gap: '0.4rem' }}>
+                      <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+                      {loading ? 'Refreshing...' : 'Sync Orders'}
+                    </button>
+                    <button className="btn btn-lg btn-primary" onClick={() => onNavigate('upload')} style={{ gap: '0.5rem' }}>
+                      <UploadCloud size={20} />
+                      Print New Document
+                    </button>
+                  </div>
                 </div>
               </div>
 

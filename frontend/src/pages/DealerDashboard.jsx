@@ -27,7 +27,7 @@ export default function DealerDashboard() {
     fetchDealerQueue();
   }, []);
 
-  const fetchDealerQueue = async () => {
+  const fetchDealerQueue = async (isManualRefresh = false) => {
     setLoading(true);
     try {
       const res = await apiFetch('/dealer/queue');
@@ -35,6 +35,9 @@ export default function DealerDashboard() {
         setOrders(res.orders || []);
         setInventory(res.inventory || []);
         if (res.collegeName) setCollegeName(res.collegeName);
+        if (isManualRefresh) {
+          addToast('Print queue & stock refreshed!', 'success');
+        }
       }
     } catch (e) {
       addToast('Error loading dealer queue', 'error');
@@ -138,8 +141,9 @@ export default function DealerDashboard() {
               <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>{collegeName ? `Campus Station • ${collegeName}` : 'Campus Print Station'}</p>
             </div>
 
-            <button className="btn btn-sm btn-secondary" onClick={fetchDealerQueue} style={{ gap: '0.4rem' }}>
-              <RefreshCw size={15} /> Refresh Queue
+            <button className="btn btn-sm btn-secondary" onClick={() => fetchDealerQueue(true)} disabled={loading} style={{ gap: '0.4rem' }}>
+              <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+              {loading ? 'Refreshing...' : 'Refresh Queue'}
             </button>
           </div>
 

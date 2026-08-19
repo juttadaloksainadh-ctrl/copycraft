@@ -1,3 +1,6 @@
+
+
+
 import React, { useState, useEffect } from 'react';
 import { Tag, Check, ShieldCheck, CreditCard, Banknote, ArrowRight, Sparkles } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
@@ -23,7 +26,7 @@ export default function OrderSummary({ quote, onOrderSubmit, isSubmitting }) {
           setColleges(res.colleges);
           setCollegeName(res.colleges[0].name);
         }
-      } catch (e) {}
+      } catch (e) { }
     };
     fetchColleges();
   }, []);
@@ -72,7 +75,7 @@ export default function OrderSummary({ quote, onOrderSubmit, isSubmitting }) {
         spread: 70,
         origin: { y: 0.6 }
       });
-    } catch (e) {}
+    } catch (e) { }
 
     onOrderSubmit({
       deliveryLocation,

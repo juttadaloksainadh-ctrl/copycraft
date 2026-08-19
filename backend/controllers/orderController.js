@@ -107,7 +107,7 @@ export const createOrder = async (req, res) => {
   const dealer = db.users.find(u => u.role === 'dealer' && u.collegeId === finalCollegeId) || db.users.find(u => u.role === 'dealer') || null;
   const distributor = db.users.find(u => u.role === 'distributor' && u.collegeId === finalCollegeId) || db.users.find(u => u.role === 'distributor') || null;
 
-  // Calculate pricing aggregate for all files
+  // Calculate pricing aggregate for all files accurately
   let totalPrintCost = 0;
   let totalAddonCost = 0;
   let totalPageCount = 0;
@@ -118,12 +118,12 @@ export const createOrder = async (req, res) => {
       quantity: f.quantity || 1,
       paperSize: f.paperSize || 'A4',
       printMode: f.printMode || 'bw',
-      sideMode: f.sideMode || 'double',
+      sideMode: f.sideMode || 'single',
       binding: f.binding || 'none',
       lamination: f.lamination || 'none',
       coverSheet: f.coverSheet || 'none',
-      couponCode,
-      referralDiscount
+      couponCode: null,
+      referralDiscount: 0
     });
 
     totalPrintCost += fileQuote.breakdown.printCost;
@@ -131,12 +131,42 @@ export const createOrder = async (req, res) => {
     totalPageCount += (f.pageCount || 1) * (f.quantity || 1);
   });
 
-  const aggregateQuote = calculateOrderPrice({
-    pageCount: totalPageCount,
-    quantity: 1,
-    couponCode,
-    referralDiscount
-  });
+  const subtotalBeforeDelivery = totalPrintCost + totalAddonCost;
+  let couponDiscount = 0;
+  if (couponCode) {
+    const codeUpper = couponCode.toUpperCase();
+    const matchedDbCoupon = db.coupons?.find(c => c.code === codeUpper && c.active);
+    if (matchedDbCoupon) {
+      if (subtotalBeforeDelivery >= (matchedDbCoupon.minOrderValue || 0)) {
+        const rawDiscount = (subtotalBeforeDelivery * matchedDbCoupon.discountPercentage) / 100;
+        couponDiscount = Math.min(matchedDbCoupon.maxDiscount || Infinity, Math.round(rawDiscount));
+      }
+    } else if (codeUpper === 'WELCOME10') {
+      couponDiscount = Math.round(subtotalBeforeDelivery * 0.10);
+    } else if (codeUpper === 'EXAM50') {
+      couponDiscount = Math.min(50, subtotalBeforeDelivery * 0.20);
+    } else if (codeUpper === 'STUDENT20') {
+      couponDiscount = Math.round(subtotalBeforeDelivery * 0.20);
+    }
+  }
+
+  const netBeforeTax = Math.max(0, subtotalBeforeDelivery - couponDiscount - Number(referralDiscount || 0));
+  const feeRate = PRICING_DEFAULTS.convenienceFeeRate !== undefined ? PRICING_DEFAULTS.convenienceFeeRate : 0.026;
+  const convenienceFee = Math.round(netBeforeTax * feeRate * 100) / 100;
+  const finalPrice = Math.round((netBeforeTax + convenienceFee) * 100) / 100;
+
+  const aggregateBreakdown = {
+    printCost: totalPrintCost,
+    addonCost: totalAddonCost,
+    subtotal: subtotalBeforeDelivery,
+    deliveryFee: 0,
+    couponDiscount,
+    referralDiscount: Number(referralDiscount || 0),
+    taxableAmount: netBeforeTax,
+    gstAmount: 0,
+    convenienceFee,
+    finalPrice
+  };
 
   const orderId = `ORD-2026-${Math.floor(1000 + Math.random() * 9000)}`;
 
@@ -157,7 +187,7 @@ export const createOrder = async (req, res) => {
     distributorName: distributor ? distributor.name : 'Campus Distributor',
     distributorPhone: distributor ? distributor.phone : '',
     files,
-    pricing: aggregateQuote.breakdown,
+    pricing: aggregateBreakdown,
     paymentStatus: paymentMethod === 'COD' ? 'PENDING' : 'PAID',
     paymentMethod,
     orderStatus: 'CREATED',
