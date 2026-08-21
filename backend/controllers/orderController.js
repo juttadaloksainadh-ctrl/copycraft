@@ -80,34 +80,10 @@ export const uploadAndAnalyzeFiles = async (req, res) => {
   }
 };
 
-export const createOrder = async (req, res) => {
-  const {
-    files,
-    collegeId,
-    deliveryLocation,
-    paymentMethod = 'COD',
-    couponCode = null,
-    referralDiscount = 0,
-    collegeName = '',
-    yearOfStudy = '',
-    branch = ''
-  } = req.body;
-
-  if (!files || files.length === 0) {
-    return res.status(400).json({ success: false, message: 'At least one document file is required' });
-  }
-
-  const matchedCollege = db.colleges.find(c => collegeName && c.name.toLowerCase() === collegeName.toLowerCase()) ||
-                         db.colleges.find(c => collegeId && c.id === collegeId) ||
-                         db.colleges[0] || null;
-  const finalCollegeId = matchedCollege ? matchedCollege.id : (collegeId || req.user.collegeId || '');
-  const finalCollegeName = matchedCollege ? matchedCollege.name : (collegeName || 'Campus Station');
-
-  // Find assigned dealer for this college
-  const dealer = db.users.find(u => u.role === 'dealer' && u.collegeId === finalCollegeId) || db.users.find(u => u.role === 'dealer') || null;
-  const distributor = db.users.find(u => u.role === 'distributor' && u.collegeId === finalCollegeId) || db.users.find(u => u.role === 'distributor') || null;
-
-  // Calculate pricing aggregate for all files accurately
+/**
+ * Helper to compute aggregate quote across all files in an order
+ */
+export function calculateOrderAggregateQuote(files, couponCode, referralDiscount = 0) {
   let totalPrintCost = 0;
   let totalAddonCost = 0;
   let totalPageCount = 0;
@@ -155,7 +131,7 @@ export const createOrder = async (req, res) => {
   const convenienceFee = Math.round(netBeforeTax * feeRate * 100) / 100;
   const finalPrice = Math.round((netBeforeTax + convenienceFee) * 100) / 100;
 
-  const aggregateBreakdown = {
+  return {
     printCost: totalPrintCost,
     addonCost: totalAddonCost,
     subtotal: subtotalBeforeDelivery,
@@ -167,19 +143,55 @@ export const createOrder = async (req, res) => {
     convenienceFee,
     finalPrice
   };
+}
+
+/**
+ * Core order creation logic used by both COD and Razorpay payment verification
+ */
+export async function createOrderRecord({ user, orderData, paymentInfo = {} }) {
+  const {
+    files,
+    collegeId,
+    deliveryLocation,
+    paymentMethod = 'COD',
+    couponCode = null,
+    referralDiscount = 0,
+    collegeName = '',
+    yearOfStudy = '',
+    branch = ''
+  } = orderData;
+
+  if (!files || files.length === 0) {
+    throw new Error('At least one document file is required');
+  }
+
+  const matchedCollege = db.colleges.find(c => collegeName && c.name.toLowerCase() === collegeName.toLowerCase()) ||
+                         db.colleges.find(c => collegeId && c.id === collegeId) ||
+                         db.colleges[0] || null;
+  const finalCollegeId = matchedCollege ? matchedCollege.id : (collegeId || user.collegeId || '');
+  const finalCollegeName = matchedCollege ? matchedCollege.name : (collegeName || 'Campus Station');
+
+  // Find assigned dealer for this college
+  const dealer = db.users.find(u => u.role === 'dealer' && u.collegeId === finalCollegeId) || db.users.find(u => u.role === 'dealer') || null;
+  const distributor = db.users.find(u => u.role === 'distributor' && u.collegeId === finalCollegeId) || db.users.find(u => u.role === 'distributor') || null;
+
+  // Calculate pricing aggregate for all files accurately
+  const aggregateBreakdown = calculateOrderAggregateQuote(files, couponCode, referralDiscount);
 
   const orderId = `ORD-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+  const paymentStatus = paymentInfo.paymentStatus || (paymentMethod === 'COD' ? 'PENDING' : 'PAID');
+  const transactionId = paymentInfo.transactionId || paymentInfo.razorpayPaymentId || `TXN_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
 
   const newOrder = {
     id: orderId,
-    customerId: req.user.id,
-    customerName: req.user.name,
-    customerPhone: req.user.phone,
+    customerId: user.id,
+    customerName: user.name,
+    customerPhone: user.phone,
     collegeId: finalCollegeId,
     collegeName: finalCollegeName,
     yearOfStudy: yearOfStudy || 'Student',
     branch: branch || 'General',
-    deliveryLocation: deliveryLocation || req.user.roomDetails || 'Campus Hub',
+    deliveryLocation: deliveryLocation || user.roomDetails || 'Campus Hub',
     dealerId: dealer ? dealer.id : null,
     dealerName: dealer ? dealer.name : 'Pending Assignment',
     dealerPhone: dealer ? dealer.phone : '',
@@ -188,14 +200,18 @@ export const createOrder = async (req, res) => {
     distributorPhone: distributor ? distributor.phone : '',
     files,
     pricing: aggregateBreakdown,
-    paymentStatus: paymentMethod === 'COD' ? 'PENDING' : 'PAID',
+    paymentStatus,
     paymentMethod,
+    paymentGateway: paymentInfo.gateway || (paymentMethod === 'COD' ? 'CASH' : 'RAZORPAY'),
+    razorpayOrderId: paymentInfo.razorpayOrderId || null,
+    razorpayPaymentId: paymentInfo.razorpayPaymentId || null,
+    razorpaySignature: paymentInfo.razorpaySignature || null,
     orderStatus: 'CREATED',
     timeline: [
       {
         status: 'CREATED',
         time: new Date().toISOString(),
-        note: `Order placed via ${paymentMethod === 'COD' ? 'Cash on Delivery (COD)' : 'Online Payment (' + paymentMethod + ')'}`
+        note: `Order placed via ${paymentMethod === 'COD' ? 'Cash on Delivery (COD)' : 'Razorpay Online Payment (' + paymentMethod + ')'}`
       }
     ],
     createdAt: new Date().toISOString()
@@ -215,52 +231,77 @@ export const createOrder = async (req, res) => {
   // Log action
   db.auditLogs.unshift({
     id: `log_${Date.now()}`,
-    userId: req.user.id,
-    userName: req.user.name,
+    userId: user.id,
+    userName: user.name,
     action: 'ORDER_CREATE',
-    details: `Created order ${orderId} for ₹${aggregateQuote.breakdown.finalPrice} (${paymentMethod})`,
+    details: `Created order ${orderId} for ₹${aggregateBreakdown.finalPrice} (${paymentMethod})`,
     timestamp: new Date().toISOString()
   });
 
   syncDbToR2();
 
   // Save payment receipt to MongoDB (async, non-blocking)
-  createPaymentReceipt({
-    orderId,
-    customerId: req.user.id,
-    customerName: req.user.name,
-    customerEmail: req.user.email,
-    amount: aggregateQuote.breakdown.finalPrice,
-    method: paymentMethod,
-    transactionId: `TXN_${Date.now()}_${Math.floor(Math.random() * 10000)}`,
-    status: paymentMethod === 'COD' ? 'PENDING' : 'PAID',
-    receiptData: {
-      items: files.map(f => ({
-        fileName: f.name,
-        pageCount: f.pageCount || 1,
-        printMode: f.printMode || 'bw',
-        binding: f.binding || 'none',
-        cost: calculateOrderPrice({
+  let savedReceipt = null;
+  try {
+    savedReceipt = await createPaymentReceipt({
+      orderId,
+      customerId: user.id,
+      customerName: user.name,
+      customerEmail: user.email,
+      amount: aggregateBreakdown.finalPrice,
+      method: paymentMethod,
+      gateway: paymentInfo.gateway || (paymentMethod === 'COD' ? 'CASH' : 'RAZORPAY'),
+      transactionId,
+      razorpayOrderId: paymentInfo.razorpayOrderId || null,
+      razorpayPaymentId: paymentInfo.razorpayPaymentId || null,
+      status: paymentStatus,
+      receiptData: {
+        items: files.map(f => ({
+          fileName: f.name,
           pageCount: f.pageCount || 1,
           printMode: f.printMode || 'bw',
           binding: f.binding || 'none',
-        }).breakdown.finalPrice
-      })),
-      ...aggregateQuote.breakdown
-    }
-  }).then(receipt => {
-    if (receipt && !receipt._fallback) {
-      console.log(`   🧾 Payment receipt saved: ${receipt.receiptId}`);
-    }
-  }).catch(err => {
-    console.error('   ⚠️ Failed to save payment receipt:', err.message);
-  });
+          cost: calculateOrderPrice({
+            pageCount: f.pageCount || 1,
+            printMode: f.printMode || 'bw',
+            binding: f.binding || 'none',
+          }).breakdown.finalPrice
+        })),
+        ...aggregateBreakdown
+      }
+    });
 
-  return res.status(201).json({
-    success: true,
-    message: 'Order created successfully!',
-    order: newOrder
-  });
+    if (savedReceipt && !savedReceipt._fallback) {
+      console.log(`   🧾 Payment receipt saved: ${savedReceipt.receiptId}`);
+    }
+  } catch (err) {
+    console.error('   ⚠️ Failed to save payment receipt:', err.message);
+  }
+
+  return { order: newOrder, receipt: savedReceipt };
+}
+
+export const createOrder = async (req, res) => {
+  try {
+    const { order, receipt } = await createOrderRecord({
+      user: req.user,
+      orderData: req.body,
+      paymentInfo: {
+        gateway: req.body.paymentMethod === 'COD' ? 'CASH' : 'RAZORPAY',
+        paymentStatus: req.body.paymentMethod === 'COD' ? 'PENDING' : 'PAID'
+      }
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: 'Order created successfully!',
+      order,
+      receipt
+    });
+  } catch (error) {
+    console.error('Create order error:', error);
+    return res.status(400).json({ success: false, message: error.message || 'Failed to create order' });
+  }
 };
 
 export const getCustomerOrders = (req, res) => {

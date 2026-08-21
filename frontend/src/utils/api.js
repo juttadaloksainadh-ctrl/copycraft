@@ -73,12 +73,30 @@ export async function getPaymentReceipts() {
 }
 
 /**
- * Get a payment receipt for a specific order.
- *
- * @param {string} orderId - The order ID
- * @returns {Promise<{success: boolean, receipt?: object}>}
+ * Get Razorpay public configuration and status.
  */
-export async function getPaymentReceiptByOrder(orderId) {
-  return apiFetch(`/payments/receipts/order/${orderId}`);
+export async function getRazorpayConfig() {
+  return apiFetch('/payments/razorpay/config');
 }
+
+/**
+ * Create a Razorpay order from quote details.
+ */
+export async function createRazorpayOrder(orderParams) {
+  return apiFetch('/payments/razorpay/create-order', {
+    method: 'POST',
+    body: JSON.stringify(orderParams)
+  });
+}
+
+/**
+ * Verify Razorpay payment signature and place confirmed order.
+ */
+export async function verifyRazorpayPayment(verificationPayload) {
+  return apiFetch('/payments/razorpay/verify', {
+    method: 'POST',
+    body: JSON.stringify(verificationPayload)
+  });
+}
+
 

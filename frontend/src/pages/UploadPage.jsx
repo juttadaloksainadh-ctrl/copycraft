@@ -9,9 +9,14 @@ import { useToast } from '../context/ToastContext';
 import { apiFetch } from '../utils/api';
 import { calculateOrderPrice, updateLocalPricingDefaults } from '../utils/pricingService';
 import { Sparkles, ArrowLeft } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { getRazorpayConfig, createRazorpayOrder, verifyRazorpayPayment } from '../utils/api';
+import { openRazorpayCheckout } from '../utils/razorpay';
+import confetti from 'canvas-confetti';
 
 export default function UploadPage({ onNavigate }) {
   const { addToast } = useToast();
+  const { user } = useAuth();
 
   // Initialize with clean empty file list — no default mock documents
   const [files, setFiles] = useState([]);
@@ -60,33 +65,120 @@ export default function UploadPage({ onNavigate }) {
       return;
     }
 
-    setIsSubmitting(true);
-    try {
-      const orderPayload = {
-        files: files.map(f => ({ ...f, ...options })),
-        deliveryLocation: checkoutData.deliveryLocation,
-        paymentMethod: checkoutData.paymentMethod,
-        couponCode: checkoutData.couponCode,
-        collegeName: checkoutData.collegeName,
-        yearOfStudy: checkoutData.yearOfStudy,
-        branch: checkoutData.branch
-      };
+    const filesToSend = files.map(f => ({ ...f, ...options }));
+    const orderPayload = {
+      files: filesToSend,
+      deliveryLocation: checkoutData.deliveryLocation,
+      paymentMethod: checkoutData.paymentMethod,
+      couponCode: checkoutData.couponCode,
+      collegeName: checkoutData.collegeName,
+      yearOfStudy: checkoutData.yearOfStudy,
+      branch: checkoutData.branch
+    };
 
-      const res = await apiFetch('/orders/create', {
-        method: 'POST',
-        body: JSON.stringify(orderPayload)
+    setIsSubmitting(true);
+
+    // Flow 1: Cash on Delivery (COD)
+    if (checkoutData.paymentMethod === 'COD') {
+      try {
+        const res = await apiFetch('/orders/create', {
+          method: 'POST',
+          body: JSON.stringify(orderPayload)
+        });
+
+        if (res.success) {
+          try {
+            confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
+          } catch (e) {}
+          addToast(`Order ${res.order.id} placed successfully with Cash on Delivery!`, 'success');
+          onNavigate('dashboard');
+        } else {
+          addToast(res.message || 'Order submission failed', 'error');
+        }
+      } catch (e) {
+        addToast('Error placing COD order', 'error');
+      } finally {
+        setIsSubmitting(false);
+      }
+      return;
+    }
+
+    // Flow 2: Razorpay Online Payment Gateway
+    try {
+      // Step A: Check Razorpay gateway configuration
+      const configRes = await getRazorpayConfig();
+      if (!configRes.isConfigured) {
+        setIsSubmitting(false);
+        addToast(
+          'Razorpay credentials not yet configured in backend/.env. Please add RAZORPAY_KEY_ID & RAZORPAY_KEY_SECRET to enable online checkout.',
+          'warning'
+        );
+        return;
+      }
+
+      // Step B: Create official Razorpay Order on backend
+      const rzpRes = await createRazorpayOrder({
+        files: filesToSend,
+        couponCode: checkoutData.couponCode,
+        referralDiscount: 0
       });
 
-      if (res.success) {
-        addToast(`Order ${res.order.id} placed successfully!`, 'success');
-        onNavigate('dashboard');
-      } else {
-        addToast(res.message || 'Order submission failed', 'error');
+      if (!rzpRes.success || !rzpRes.razorpayOrderId) {
+        setIsSubmitting(false);
+        addToast(rzpRes.message || 'Failed to initialize payment gateway order', 'error');
+        return;
       }
+
+      // Step C: Launch Razorpay Checkout Modal
+      await openRazorpayCheckout({
+        keyId: rzpRes.keyId,
+        amount: rzpRes.amount,
+        currency: rzpRes.currency || 'INR',
+        orderId: rzpRes.razorpayOrderId,
+        name: 'CopyCraft Printing',
+        description: `Campus Print Order (${files.length} document${files.length > 1 ? 's' : ''})`,
+        prefill: {
+          name: user?.name || '',
+          email: user?.email || '',
+          phone: user?.phone || ''
+        },
+        onSuccess: async (paymentResponse) => {
+          // Step D: Cryptographically verify signature on backend and generate verified order & receipt
+          try {
+            const verifyRes = await verifyRazorpayPayment({
+              razorpayOrderId: paymentResponse.razorpay_order_id,
+              razorpayPaymentId: paymentResponse.razorpay_payment_id,
+              razorpaySignature: paymentResponse.razorpay_signature,
+              orderData: orderPayload
+            });
+
+            if (verifyRes.success) {
+              try {
+                confetti({ particleCount: 100, spread: 80, origin: { y: 0.6 } });
+              } catch (e) {}
+              addToast(`Payment verified! Order ${verifyRes.order.id} placed successfully!`, 'success');
+              onNavigate('dashboard');
+            } else {
+              addToast(verifyRes.message || 'Payment verification failed', 'error');
+            }
+          } catch (err) {
+            addToast('Error verifying transaction with server', 'error');
+          } finally {
+            setIsSubmitting(false);
+          }
+        },
+        onDismiss: () => {
+          setIsSubmitting(false);
+          addToast('Payment cancelled by user', 'info');
+        },
+        onError: (paymentErr) => {
+          setIsSubmitting(false);
+          addToast(paymentErr?.description || 'Payment transaction failed', 'error');
+        }
+      });
     } catch (e) {
-      addToast('Error placing order', 'error');
-    } finally {
       setIsSubmitting(false);
+      addToast(e.message || 'Error processing payment gateway', 'error');
     }
   };
 

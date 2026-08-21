@@ -10,7 +10,7 @@ import confetti from 'canvas-confetti';
 export default function OrderSummary({ quote, onOrderSubmit, isSubmitting }) {
   const [couponInput, setCouponInput] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState(null);
-  const [paymentMethod, setPaymentMethod] = useState('UPI');
+  const [paymentMethod, setPaymentMethod] = useState('RAZORPAY');
   const [deliveryLocation, setDeliveryLocation] = useState('Hostel 4, Room 302');
   const [collegeName, setCollegeName] = useState('');
   const [yearOfStudy, setYearOfStudy] = useState('3rd Year');
@@ -67,15 +67,6 @@ export default function OrderSummary({ quote, onOrderSubmit, isSubmitting }) {
       addToast('Please enter your academic branch', 'warning');
       return;
     }
-
-    // Trigger celebration confetti
-    try {
-      confetti({
-        particleCount: 80,
-        spread: 70,
-        origin: { y: 0.6 }
-      });
-    } catch (e) { }
 
     onOrderSubmit({
       deliveryLocation,
@@ -231,11 +222,11 @@ export default function OrderSummary({ quote, onOrderSubmit, isSubmitting }) {
 
       {/* Payment Gateway Options */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
-        <label className="input-label">Select Payment Gateway</label>
+        <label className="input-label">Select Payment Method</label>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
           {[
-            { id: 'UPI', label: 'Razorpay UPI', icon: CreditCard },
-            { id: 'COD', label: 'Cash on Delivery', icon: Banknote }
+            { id: 'RAZORPAY', label: 'Razorpay Online', sub: 'UPI, Cards, NetBanking', icon: CreditCard },
+            { id: 'COD', label: 'Cash on Delivery', sub: 'Pay on Campus Arrival', icon: Banknote }
           ].map(method => (
             <button
               key={method.id}
@@ -243,20 +234,26 @@ export default function OrderSummary({ quote, onOrderSubmit, isSubmitting }) {
               onClick={() => setPaymentMethod(method.id)}
               style={{
                 display: 'flex',
+                flexDirection: 'column',
                 alignItems: 'center',
-                justify: 'center',
-                gap: '0.4rem',
+                justifyContent: 'center',
+                gap: '0.2rem',
                 padding: '0.65rem 0.5rem',
                 borderRadius: 'var(--radius-md)',
                 border: `1.5px solid ${paymentMethod === method.id ? 'var(--primary)' : 'var(--border-color)'}`,
                 background: paymentMethod === method.id ? 'var(--primary-light)' : 'var(--bg-app)',
                 color: paymentMethod === method.id ? 'var(--primary)' : 'var(--text-main)',
                 fontWeight: 600,
-                fontSize: '0.825rem'
+                fontSize: '0.825rem',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
               }}
             >
-              <method.icon size={16} />
-              {method.label}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                <method.icon size={15} />
+                <span>{method.label}</span>
+              </div>
+              <span style={{ fontSize: '0.68rem', fontWeight: 400, opacity: 0.8 }}>{method.sub}</span>
             </button>
           ))}
         </div>
@@ -269,14 +266,26 @@ export default function OrderSummary({ quote, onOrderSubmit, isSubmitting }) {
         disabled={isSubmitting}
         style={{ width: '100%', marginTop: '0.5rem', gap: '0.6rem' }}
       >
-        {isSubmitting ? 'Securing Order...' : 'Confirm Order & Pay'}
-        <ArrowRight size={18} />
+        {isSubmitting ? (
+          'Processing...'
+        ) : paymentMethod === 'RAZORPAY' ? (
+          <>
+            <span>Pay ₹{breakdown.finalPrice.toFixed(2)} with Razorpay</span>
+            <ArrowRight size={18} />
+          </>
+        ) : (
+          <>
+            <span>Place Cash on Delivery Order</span>
+            <ArrowRight size={18} />
+          </>
+        )}
       </button>
 
       <div style={{ textAlign: 'center', fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
         <ShieldCheck size={14} color="var(--success)" />
-        100% Secure SSL Payment • Auto file deletion in 48 hrs
+        100% Secure SSL Payment • Powered by Razorpay
       </div>
     </div>
   );
 }
+
