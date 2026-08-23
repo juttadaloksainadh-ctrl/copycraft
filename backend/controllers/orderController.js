@@ -1,4 +1,4 @@
-import { calculateOrderPrice, PRICING_DEFAULTS } from '../services/pricingService.js';
+import { calculateOrderPrice, getPricingRates, PRICING_DEFAULTS } from '../services/pricingService.js';
 import { extractFileMetadata } from '../services/pdfService.js';
 import { analyzeDocumentAI } from '../services/aiService.js';
 import { isR2Configured, uploadFile, generateFileKey } from '../services/r2Storage.js';
@@ -7,7 +7,7 @@ import { db, syncDbToR2 } from '../models/dbStore.js';
 import { isUsingMongo, getMongoCollection } from '../config/db.js';
 
 export const getPricingRatesHandler = (req, res) => {
-  return res.json({ success: true, pricingRates: PRICING_DEFAULTS });
+  return res.json({ success: true, pricingRates: getPricingRates() });
 };
 
 export const calculateQuote = (req, res) => {
@@ -84,6 +84,21 @@ export const uploadAndAnalyzeFiles = async (req, res) => {
  * Helper to compute aggregate quote across all files in an order
  */
 export function calculateOrderAggregateQuote(files, couponCode, referralDiscount = 0) {
+  if (!files || files.length === 0) {
+    return {
+      printCost: 0,
+      addonCost: 0,
+      subtotal: 0,
+      deliveryFee: 0,
+      couponDiscount: 0,
+      referralDiscount: 0,
+      taxableAmount: 0,
+      gstAmount: 0,
+      convenienceFee: 0,
+      finalPrice: 0
+    };
+  }
+
   let totalPrintCost = 0;
   let totalAddonCost = 0;
   let totalPageCount = 0;
@@ -127,7 +142,8 @@ export function calculateOrderAggregateQuote(files, couponCode, referralDiscount
   }
 
   const netBeforeTax = Math.max(0, subtotalBeforeDelivery - couponDiscount - Number(referralDiscount || 0));
-  const feeRate = PRICING_DEFAULTS.convenienceFeeRate !== undefined ? PRICING_DEFAULTS.convenienceFeeRate : 0.026;
+  const activeRates = getPricingRates();
+  const feeRate = activeRates.convenienceFeeRate !== undefined ? activeRates.convenienceFeeRate : 0.026;
   const convenienceFee = Math.round(netBeforeTax * feeRate * 100) / 100;
   const finalPrice = Math.round((netBeforeTax + convenienceFee) * 100) / 100;
 

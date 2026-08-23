@@ -263,11 +263,19 @@ export default function OrderSummary({ quote, onOrderSubmit, isSubmitting }) {
       <button
         className="btn btn-lg btn-primary"
         onClick={handleSubmit}
-        disabled={isSubmitting}
-        style={{ width: '100%', marginTop: '0.5rem', gap: '0.6rem' }}
+        disabled={isSubmitting || breakdown.finalPrice <= 0}
+        style={{
+          width: '100%',
+          marginTop: '0.5rem',
+          gap: '0.6rem',
+          opacity: breakdown.finalPrice <= 0 ? 0.6 : 1,
+          cursor: breakdown.finalPrice <= 0 ? 'not-allowed' : 'pointer'
+        }}
       >
         {isSubmitting ? (
           'Processing...'
+        ) : breakdown.finalPrice <= 0 ? (
+          <span>Upload Document to Calculate Total</span>
         ) : paymentMethod === 'RAZORPAY' ? (
           <>
             <span>Pay ₹{breakdown.finalPrice.toFixed(2)} with Razorpay</span>
@@ -275,7 +283,7 @@ export default function OrderSummary({ quote, onOrderSubmit, isSubmitting }) {
           </>
         ) : (
           <>
-            <span>Place Cash on Delivery Order</span>
+            <span>Place Cash on Delivery Order (₹{breakdown.finalPrice.toFixed(2)})</span>
             <ArrowRight size={18} />
           </>
         )}

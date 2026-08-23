@@ -123,30 +123,46 @@ export const getCoupons = (req, res) => {
   return res.json({ success: true, coupons: db.coupons });
 };
 
-export const updatePricingDefaults = (req, res) => {
+export const updatePricingDefaults = async (req, res) => {
   const { printMode, binding, lamination, paperBase, sideMode, convenienceFeeRate } = req.body;
 
-  if (printMode) Object.assign(PRICING_DEFAULTS.printMode, printMode);
-  if (binding) Object.assign(PRICING_DEFAULTS.binding, binding);
-  if (lamination) Object.assign(PRICING_DEFAULTS.lamination, lamination);
-  if (paperBase) Object.assign(PRICING_DEFAULTS.paperBase, paperBase);
-  if (sideMode) Object.assign(PRICING_DEFAULTS.sideMode, sideMode);
-  if (convenienceFeeRate !== undefined) PRICING_DEFAULTS.convenienceFeeRate = Number(convenienceFeeRate);
+  const updatedRates = applyPricingDefaults({
+    printMode,
+    binding,
+    lamination,
+    paperBase,
+    sideMode,
+    convenienceFeeRate
+  });
 
-  db.pricingDefaults = JSON.parse(JSON.stringify(PRICING_DEFAULTS));
+  db.pricingDefaults = JSON.parse(JSON.stringify(updatedRates));
+
+  if (isUsingMongo()) {
+    try {
+      const settingsCol = getMongoCollection('system_settings');
+      await settingsCol.updateOne(
+        { key: 'pricing_defaults' },
+        { $set: { key: 'pricing_defaults', rates: updatedRates, updatedAt: new Date().toISOString() } },
+        { upsert: true }
+      );
+      console.log('   💰 Global Pricing Matrix saved permanently to MongoDB');
+    } catch (e) {
+      console.error('Mongo pricing update error:', e.message);
+    }
+  }
 
   db.auditLogs.unshift({
     id: `log_${Date.now()}`,
     userId: req.user.id,
     userName: req.user.name,
     action: 'PRICING_RULES_UPDATE',
-    details: 'Updated global dynamic pricing rates matrix',
+    details: `Updated global dynamic pricing rates matrix (B&W: ₹${updatedRates.printMode?.bw}, Color: ₹${updatedRates.printMode?.color}, Spiral: ₹${updatedRates.binding?.spiral})`,
     timestamp: new Date().toISOString()
   });
 
   syncDbToR2();
 
-  return res.json({ success: true, message: 'Pricing rates updated successfully', pricingDefaults: PRICING_DEFAULTS });
+  return res.json({ success: true, message: 'Pricing rates updated successfully across all portals', pricingDefaults: updatedRates });
 };
 
 export const getAuditLogs = (req, res) => {

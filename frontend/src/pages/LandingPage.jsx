@@ -1,14 +1,42 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Printer, Zap, ShieldCheck, Truck, Sparkles, ArrowRight, CheckCircle2, Building2, Layers, DollarSign } from 'lucide-react';
 import Navbar from '../components/common/Navbar';
 import Footer from '../components/common/Footer';
-import { calculateOrderPrice } from '../utils/pricingService';
+import { calculateOrderPrice, updateLocalPricingDefaults, PRICING_DEFAULTS } from '../utils/pricingService';
+import { apiFetch } from '../utils/api';
 
 export default function LandingPage({ onNavigate }) {
   const [estPages, setEstPages] = useState(15);
   const [estColorMode, setEstColorMode] = useState('bw');
   const [estSideMode, setEstSideMode] = useState('double');
   const [estBinding, setEstBinding] = useState('spiral');
+  const [rates, setRates] = useState({
+    bw: 1.50,
+    color: 6.00,
+    staple: 5,
+    spiral: 35,
+    softcover: 65,
+    hardcover: 130
+  });
+
+  useEffect(() => {
+    apiFetch('/orders/pricing-rates')
+      .then(res => {
+        if (res.success && res.pricingRates) {
+          updateLocalPricingDefaults(res.pricingRates);
+          const pr = res.pricingRates;
+          setRates({
+            bw: pr.printMode?.bw ?? 1.50,
+            color: pr.printMode?.color ?? 6.00,
+            staple: pr.binding?.staple ?? 5,
+            spiral: pr.binding?.spiral ?? 35,
+            softcover: pr.binding?.softcover ?? 65,
+            hardcover: pr.binding?.hardcover ?? 130
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const quote = calculateOrderPrice({
     pageCount: estPages,
@@ -126,13 +154,13 @@ export default function LandingPage({ onNavigate }) {
                     className={`btn btn-sm ${estColorMode === 'bw' ? 'btn-primary' : 'btn-secondary'}`}
                     onClick={() => setEstColorMode('bw')}
                   >
-                    Black & White (₹1.50)
+                    Black & White (₹{rates.bw.toFixed(2)})
                   </button>
                   <button
                     className={`btn btn-sm ${estColorMode === 'color' ? 'btn-primary' : 'btn-secondary'}`}
                     onClick={() => setEstColorMode('color')}
                   >
-                    Full Colour (₹6.00)
+                    Full Colour (₹{rates.color.toFixed(2)})
                   </button>
                 </div>
               </div>
@@ -159,10 +187,10 @@ export default function LandingPage({ onNavigate }) {
                 <label className="input-label">Binding Style</label>
                 <select className="input-field" value={estBinding} onChange={e => setEstBinding(e.target.value)}>
                   <option value="none">No Binding (₹0)</option>
-                  <option value="staple">Corner Staple (+₹5)</option>
-                  <option value="spiral">Plastic Spiral Binding (+₹35)</option>
-                  <option value="softcover">Softcover Thermal (+₹65)</option>
-                  <option value="hardcover">Hardcover Golden (+₹130)</option>
+                  <option value="staple">Corner Staple (+₹{rates.staple})</option>
+                  <option value="spiral">Plastic Spiral Binding (+₹{rates.spiral})</option>
+                  <option value="softcover">Softcover Thermal (+₹{rates.softcover})</option>
+                  <option value="hardcover">Hardcover Golden (+₹{rates.hardcover})</option>
                 </select>
               </div>
             </div>

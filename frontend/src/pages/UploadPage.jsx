@@ -46,11 +46,11 @@ export default function UploadPage({ onNavigate }) {
   }, []);
 
   // Compute aggregated quote across all uploaded files
-  const totalPages = files.reduce((sum, f) => sum + (f.pageCount || 1), 0);
+  const totalPages = files.length > 0 ? files.reduce((sum, f) => sum + (f.pageCount || 1), 0) : 0;
 
   const quote = calculateOrderPrice({
-    pageCount: Math.max(1, totalPages),
-    quantity: options.quantity,
+    pageCount: totalPages,
+    quantity: files.length > 0 ? options.quantity : 0,
     paperSize: options.paperSize,
     printMode: options.printMode,
     sideMode: options.sideMode,

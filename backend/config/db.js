@@ -3,11 +3,12 @@
  * --------------------------------------------------------
  * Supports:
  *   1. MongoDB Atlas — Primary production database
- *   2. In-memory store (dbStore.js) — Graceful fallback if MongoDB is unreachable
+ *   2. In-memory store (dbStore.js) + R2/Local JSON — Graceful fallback if MongoDB is unreachable
  */
 
 import dns from 'dns';
-import { db as inMemoryDb } from '../models/dbStore.js';
+import { db as inMemoryDb, syncDbToR2 } from '../models/dbStore.js';
+import { applyPricingDefaults } from '../services/pricingService.js';
 
 // Force Node.js DNS to prefer IPv4 over IPv6 for MongoDB Atlas connection reliability
 try {
@@ -19,11 +20,21 @@ let mongoClient = null;
 let mongoDb = null;
 
 /**
+ * Sanitize MongoDB URI to strip extraneous brackets around passwords.
+ */
+function sanitizeMongoUri(rawUri) {
+  if (!rawUri) return rawUri;
+  // Replace <password> placeholder format if angle brackets were left in
+  return rawUri.replace(/:\s*<([^>]+)>\s*@/, ':$1@');
+}
+
+/**
  * Initialize the MongoDB database connection.
  * Call this once at server startup.
  */
 export async function initDatabase() {
-  const mongoUri = process.env.MONGODB_URI;
+  const rawUri = process.env.MONGODB_URI;
+  const mongoUri = sanitizeMongoUri(rawUri);
 
   if (!mongoUri || mongoUri.trim() === '' || process.env.DB_MODE === 'memory') {
     console.log('📦 Database Mode: In-Memory Store (demo mode)');
@@ -52,7 +63,7 @@ export async function initDatabase() {
     console.log(`   → Database: ${mongoDb.databaseName}`);
     console.log(`   → Host: ${mongoUri.includes('@') ? mongoUri.split('@')[1].split('/')[0] : 'localhost'}`);
 
-    await seedCollections(mongoDb);
+    await seedAndSyncCollections(mongoDb);
 
     return { mode: 'mongodb', db: mongoDb, client: mongoClient };
   } catch (err) {
@@ -100,7 +111,7 @@ export async function closeDatabase() {
   }
 }
 
-async function seedCollections(db) {
+async function seedAndSyncCollections(db) {
   const collections = ['users', 'orders', 'colleges', 'coupons', 'notifications', 'auditLogs', 'supportTickets'];
 
   for (const collName of collections) {
@@ -108,9 +119,29 @@ async function seedCollections(db) {
     const count = await collection.countDocuments();
 
     if (count === 0 && inMemoryDb[collName] && inMemoryDb[collName].length > 0) {
+      // Seed initial data if MongoDB collection is completely empty
       await collection.insertMany(inMemoryDb[collName]);
       console.log(`   → Seeded ${collName}: ${inMemoryDb[collName].length} records`);
+    } else {
+      // Sync from MongoDB to in-memory store so memory references are always up to date
+      const docs = await collection.find({}).toArray();
+      // Remove MongoDB _id field when updating memory array
+      inMemoryDb[collName] = docs.map(({ _id, ...doc }) => doc);
+      console.log(`   → Loaded ${collName} from MongoDB: ${docs.length} records`);
     }
+  }
+
+  // Load persistent system settings (e.g., admin pricing matrix)
+  try {
+    const settingsCol = db.collection('system_settings');
+    const pricingDoc = await settingsCol.findOne({ key: 'pricing_defaults' });
+    if (pricingDoc && pricingDoc.rates) {
+      applyPricingDefaults(pricingDoc.rates);
+      inMemoryDb.pricingDefaults = pricingDoc.rates;
+      console.log('   → Loaded custom Admin Pricing Rates from MongoDB');
+    }
+  } catch (err) {
+    console.warn('   ⚠️ Failed to load system settings from MongoDB:', err.message);
   }
 
   const receiptsCol = db.collection('paymentReceipts');
@@ -123,13 +154,9 @@ async function seedCollections(db) {
 
   // 14-Day TTL Index for Audit Logs (automatic database cleanup)
   const auditLogsCol = db.collection('auditLogs');
-  // Ensure we have a timestamp index that expires docs after 14 days (14 * 24 * 3600 seconds)
   await auditLogsCol.createIndex({ timestamp: 1 }, { expireAfterSeconds: 1209600 });
-  console.log('   → 14-day TTL Index created for auditLogs');
 
   // 7-Day TTL Index for Notifications
   const notificationsCol = db.collection('notifications');
-  // Ensure we have a timestamp index that expires docs after 7 days (7 * 24 * 3600 seconds)
   await notificationsCol.createIndex({ createdAt: 1 }, { expireAfterSeconds: 604800 });
-  console.log('   → 7-day TTL Index created for notifications');
 }

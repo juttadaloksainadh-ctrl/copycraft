@@ -11,10 +11,17 @@ export default function FileUploader({ onFilesUpdated, files = [] }) {
   const handleFileDrop = async (e) => {
     e.preventDefault();
     setIsDragging(false);
-    const droppedFiles = Array.from(e.dataTransfer ? e.dataTransfer.files : e.target.files);
+    const droppedFiles = Array.from(e.dataTransfer ? e.dataTransfer.files : []);
     if (!droppedFiles.length) return;
-
     await processUpload(droppedFiles);
+  };
+
+  const handleFileInputChange = async (e) => {
+    const selectedFiles = Array.from(e.target.files || []);
+    // Reset file input value so user can upload more files or re-select
+    e.target.value = '';
+    if (!selectedFiles.length) return;
+    await processUpload(selectedFiles);
   };
 
   const processUpload = async (uploadedFiles) => {
@@ -28,14 +35,14 @@ export default function FileUploader({ onFilesUpdated, files = [] }) {
         body: formData
       });
 
-      if (res.success) {
+      if (res.success && res.files) {
         onFilesUpdated([...files, ...res.files]);
-        addToast(`${res.files.length} document(s) uploaded and parsed by AI`, 'success');
+        addToast(`${res.files.length} document(s) uploaded and parsed successfully`, 'success');
       } else {
-        addToast(res.message || 'Error processing file upload', 'error');
+        addToast(res.message || 'Error processing file upload. Please check your file format.', 'error');
       }
     } catch (err) {
-      addToast('Upload failed', 'error');
+      addToast('Upload failed. Please check your network connection.', 'error');
     } finally {
       setIsUploading(false);
     }
@@ -67,7 +74,7 @@ export default function FileUploader({ onFilesUpdated, files = [] }) {
           type="file"
           multiple
           accept=".pdf,.doc,.docx,.ppt,.pptx,.jpg,.jpeg,.png"
-          onChange={handleFileDrop}
+          onChange={handleFileInputChange}
           style={{ display: 'none' }}
           id="file-input-element"
         />

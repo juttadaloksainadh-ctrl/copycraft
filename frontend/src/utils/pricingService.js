@@ -54,7 +54,7 @@ export function updateLocalPricingDefaults(newRates) {
 
 export function calculateOrderPrice(options) {
   const {
-    pageCount = 1,
+    pageCount = 0,
     quantity = 1,
     paperSize = 'A4',
     printMode = 'bw', // 'bw' | 'color'
@@ -67,11 +67,40 @@ export function calculateOrderPrice(options) {
     collegeId = null
   } = options;
 
+  // If no files / pages, return 0 for everything
+  if (!pageCount || pageCount <= 0) {
+    return {
+      pageCount: 0,
+      sheetCount: 0,
+      quantity,
+      paperSize,
+      printMode,
+      sideMode,
+      binding,
+      lamination,
+      coverSheet,
+      breakdown: {
+        printCost: 0,
+        addonCost: 0,
+        subtotal: 0,
+        deliveryFee: 0,
+        couponDiscount: 0,
+        referralDiscount: 0,
+        taxableAmount: 0,
+        gstAmount: 0,
+        convenienceFee: 0,
+        finalPrice: 0
+      }
+    };
+  }
+
   // Single side = 1 sheet per page. Both sides (double) = 2 pages printed per 1 physical paper sheet (half the pages rounded up).
   const sheetCount = sideMode === 'double' ? Math.ceil(pageCount / 2) : pageCount;
 
   const sizeMultiplier = PRICING_DEFAULTS.paperBase[paperSize] || 1.0;
-  const pagePrintRate = PRICING_DEFAULTS.printMode[printMode] || (printMode === 'color' ? 6.00 : 1.50);
+  const pagePrintRate = PRICING_DEFAULTS.printMode[printMode] !== undefined
+    ? PRICING_DEFAULTS.printMode[printMode]
+    : (printMode === 'color' ? 6.00 : 1.50);
 
   // Total raw print & paper cost per document
   const rawPrintPerDoc = sheetCount * pagePrintRate * sizeMultiplier;
@@ -109,8 +138,9 @@ export function calculateOrderPrice(options) {
   // GST Calculation (No GST)
   const gstAmount = 0;
 
-  // Convenience Fee: 2.6% of the net amount (after discounts)
-  const convenienceFee = Math.round(netBeforeTax * (PRICING_DEFAULTS.convenienceFeeRate || 0.026) * 100) / 100;
+  // Convenience Fee: based on admin-defined rate (default 2.6%)
+  const feeRate = PRICING_DEFAULTS.convenienceFeeRate !== undefined ? PRICING_DEFAULTS.convenienceFeeRate : 0.026;
+  const convenienceFee = Math.round(netBeforeTax * feeRate * 100) / 100;
 
   // Final Total = Net Amount + Convenience Fee
   const finalPrice = Math.round((netBeforeTax + convenienceFee) * 100) / 100;

@@ -113,12 +113,12 @@ export default function AdminDashboard() {
       if (resPricing.success && resPricing.pricingRates) {
         const pr = resPricing.pricingRates;
         setPricingRates({
-          bwRate: pr.printMode?.bw || 1.50,
-          colorRate: pr.printMode?.color || 6.00,
-          spiralRate: pr.binding?.spiral || 35,
-          softcoverRate: pr.binding?.softcover || 65,
-          hardcoverRate: pr.binding?.hardcover || 130,
-          laminationRate: pr.lamination?.both || 25,
+          bwRate: pr.printMode?.bw ?? 1.50,
+          colorRate: pr.printMode?.color ?? 6.00,
+          spiralRate: pr.binding?.spiral ?? 35,
+          softcoverRate: pr.binding?.softcover ?? 65,
+          hardcoverRate: pr.binding?.hardcover ?? 130,
+          laminationRate: pr.lamination?.both ?? 25,
           convenienceFeeRate: Number((pr.convenienceFeeRate !== undefined ? pr.convenienceFeeRate * 100 : 2.6).toFixed(1))
         });
       }
