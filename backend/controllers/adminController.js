@@ -223,7 +223,7 @@ export const deleteStaffAccount = async (req, res) => {
   const userIndex = db.users.findIndex(u => u.id === id);
 
   if (userIndex === -1) {
-    return res.status(404).json({ success: false, message: 'Staff user account not found' });
+    return res.status(404).json({ success: false, message: 'User account not found' });
   }
 
   const targetUser = db.users[userIndex];
@@ -246,14 +246,14 @@ export const deleteStaffAccount = async (req, res) => {
     id: `log_${Date.now()}`,
     userId: req.user.id,
     userName: req.user.name,
-    action: 'STAFF_DELETE',
-    details: `Permanently deleted staff account ${targetUser.name} (${targetUser.role})`,
+    action: 'USER_DELETE',
+    details: `Permanently deleted user account ${targetUser.name} (${targetUser.role})`,
     timestamp: new Date().toISOString()
   });
 
   syncDbToR2();
 
-  return res.json({ success: true, message: 'Staff account deleted permanently' });
+  return res.json({ success: true, message: 'User account deleted permanently' });
 };
 
 export const createCollege = async (req, res) => {

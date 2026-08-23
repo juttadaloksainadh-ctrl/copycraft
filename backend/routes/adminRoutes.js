@@ -22,6 +22,7 @@ router.use(requireRole(['admin', 'super_admin']));
 
 router.get('/analytics', getAdminAnalytics);
 router.get('/users', getAllUsers);
+router.delete('/users/:id', deleteStaffAccount);
 router.post('/staff', createStaffAccount);
 router.delete('/staff/:id', deleteStaffAccount);
 router.post('/colleges', createCollege);

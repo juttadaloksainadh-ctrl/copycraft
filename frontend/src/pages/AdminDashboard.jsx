@@ -173,17 +173,17 @@ export default function AdminDashboard() {
   };
 
   const handleDeleteStaff = async (userId) => {
-    if (!confirm('Are you sure you want to permanently delete this staff account? They will lose access immediately.')) return;
+    if (!confirm('Are you sure you want to permanently delete this user account? They will lose access immediately.')) return;
     try {
-      const res = await apiFetch(`/admin/staff/${userId}`, { method: 'DELETE' });
+      const res = await apiFetch(`/admin/users/${userId}`, { method: 'DELETE' });
       if (res.success) {
-        addToast('Staff account deleted successfully', 'success');
+        addToast('User account deleted successfully', 'success');
         fetchAdminData();
       } else {
         addToast(res.message, 'error');
       }
     } catch (e) {
-      addToast('Error deleting staff account', 'error');
+      addToast('Error deleting user account', 'error');
     }
   };
 
@@ -277,11 +277,11 @@ export default function AdminDashboard() {
     {
       header: 'Actions',
       cell: row => (
-        ['dealer', 'distributor'].includes(row.role) ? (
+        !['admin', 'super_admin'].includes(row.role) ? (
           <button className="btn btn-sm btn-danger" onClick={() => handleDeleteStaff(row.id)} style={{ gap: '0.2rem', padding: '0.25rem 0.5rem' }}>
             <Trash2 size={13} /> Delete
           </button>
-        ) : <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>System Protected</span>
+        ) : <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 600 }}>System Protected</span>
       )
     }
   ];
