@@ -260,10 +260,10 @@ export default function AdminDashboard() {
         addToast('Global pricing matrix updated successfully across all portals!', 'success');
         fetchAdminData();
       } else {
-        addToast(res.message || 'Pricing update failed', 'error');
+        addToast(`Pricing update failed: ${res.message || JSON.stringify(res)}`, 'error');
       }
     } catch (e) {
-      addToast('Failed to update pricing', 'error');
+      addToast(`Failed to update pricing: ${e.message}`, 'error');
     }
   };
 

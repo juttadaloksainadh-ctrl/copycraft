@@ -1,5 +1,5 @@
 import { db, syncDbToR2 } from '../models/dbStore.js';
-import { PRICING_DEFAULTS } from '../services/pricingService.js';
+import { PRICING_DEFAULTS, applyPricingDefaults } from '../services/pricingService.js';
 import { isUsingMongo, getMongoCollection } from '../config/db.js';
 import bcrypt from 'bcryptjs';
 
@@ -124,45 +124,54 @@ export const getCoupons = (req, res) => {
 };
 
 export const updatePricingDefaults = async (req, res) => {
-  const { printMode, binding, lamination, paperBase, sideMode, convenienceFeeRate } = req.body;
+  try {
+    const { printMode, binding, lamination, paperBase, sideMode, convenienceFeeRate } = req.body;
 
-  const updatedRates = applyPricingDefaults({
-    printMode,
-    binding,
-    lamination,
-    paperBase,
-    sideMode,
-    convenienceFeeRate
-  });
+    const updatedRates = applyPricingDefaults({
+      printMode,
+      binding,
+      lamination,
+      paperBase,
+      sideMode,
+      convenienceFeeRate
+    });
 
-  db.pricingDefaults = JSON.parse(JSON.stringify(updatedRates));
+    db.pricingDefaults = JSON.parse(JSON.stringify(updatedRates));
 
-  if (isUsingMongo()) {
-    try {
-      const settingsCol = getMongoCollection('system_settings');
-      await settingsCol.updateOne(
-        { key: 'pricing_defaults' },
-        { $set: { key: 'pricing_defaults', rates: updatedRates, updatedAt: new Date().toISOString() } },
-        { upsert: true }
-      );
-      console.log('   💰 Global Pricing Matrix saved permanently to MongoDB');
-    } catch (e) {
-      console.error('Mongo pricing update error:', e.message);
+    if (isUsingMongo()) {
+      try {
+        const settingsCol = getMongoCollection('system_settings');
+        await settingsCol.updateOne(
+          { key: 'pricing_defaults' },
+          { $set: { key: 'pricing_defaults', rates: updatedRates, updatedAt: new Date().toISOString() } },
+          { upsert: true }
+        );
+        console.log('   💰 Global Pricing Matrix saved permanently to MongoDB');
+      } catch (e) {
+        console.error('Mongo pricing update error:', e.message);
+      }
     }
+
+    db.auditLogs.unshift({
+      id: `log_${Date.now()}`,
+      userId: req.user.id,
+      userName: req.user.name,
+      action: 'PRICING_RULES_UPDATE',
+      details: `Updated global dynamic pricing rates matrix (B&W: ₹${updatedRates.printMode?.bw}, Color: ₹${updatedRates.printMode?.color}, Spiral: ₹${updatedRates.binding?.spiral})`,
+      timestamp: new Date().toISOString()
+    });
+
+    try {
+      syncDbToR2();
+    } catch (e) {
+      console.error('R2 sync error during pricing update:', e.message);
+    }
+
+    return res.json({ success: true, message: 'Pricing rates updated successfully across all portals', pricingDefaults: updatedRates });
+  } catch (err) {
+    console.error('❌ updatePricingDefaults crashed:', err);
+    return res.status(500).json({ success: false, message: `Pricing update error: ${err.message}` });
   }
-
-  db.auditLogs.unshift({
-    id: `log_${Date.now()}`,
-    userId: req.user.id,
-    userName: req.user.name,
-    action: 'PRICING_RULES_UPDATE',
-    details: `Updated global dynamic pricing rates matrix (B&W: ₹${updatedRates.printMode?.bw}, Color: ₹${updatedRates.printMode?.color}, Spiral: ₹${updatedRates.binding?.spiral})`,
-    timestamp: new Date().toISOString()
-  });
-
-  syncDbToR2();
-
-  return res.json({ success: true, message: 'Pricing rates updated successfully across all portals', pricingDefaults: updatedRates });
 };
 
 export const getAuditLogs = (req, res) => {
