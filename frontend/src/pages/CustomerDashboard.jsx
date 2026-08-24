@@ -146,14 +146,6 @@ export default function CustomerDashboard({ onNavigate }) {
                   <div style={{ fontSize: '0.75rem', color: 'var(--success)' }}>All delivered on time</div>
                 </div>
 
-                <div className="card">
-                  <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)' }}>COPYCRAFT WALLET</div>
-                  <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--success)', margin: '0.2rem 0' }}>
-                    ₹{user?.walletBalance || 150}
-                  </div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Available referral balance</div>
-                </div>
-
                 <div className="card" style={{ borderLeft: '4px solid var(--primary)' }}>
                   <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)' }}>YOUR DELIVERY PIN</div>
                   <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--primary)', margin: '0.2rem 0', letterSpacing: '3px', fontFamily: 'var(--font-mono)' }}>

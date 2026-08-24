@@ -7,7 +7,7 @@ import OrderSummary from '../components/customer/OrderSummary';
 import AiSuggestionsModal from '../components/customer/AiSuggestionsModal';
 import { useToast } from '../context/ToastContext';
 import { apiFetch } from '../utils/api';
-import { calculateOrderPrice, updateLocalPricingDefaults } from '../utils/pricingService';
+import { calculateOrderPrice, updateLocalPricingDefaults, PRICING_DEFAULTS } from '../utils/pricingService';
 import { Sparkles, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { getRazorpayConfig, createRazorpayOrder, verifyRazorpayPayment } from '../utils/api';
@@ -20,6 +20,7 @@ export default function UploadPage({ onNavigate }) {
 
   // Initialize with clean empty file list — no default mock documents
   const [files, setFiles] = useState([]);
+  const [rates, setRates] = useState(PRICING_DEFAULTS);
 
   const [options, setOptions] = useState({
     printMode: 'bw',
@@ -40,6 +41,13 @@ export default function UploadPage({ onNavigate }) {
       .then(res => {
         if (res.success && res.pricingRates) {
           updateLocalPricingDefaults(res.pricingRates);
+          setRates({
+            printMode: { ...PRICING_DEFAULTS.printMode, ...res.pricingRates.printMode },
+            binding: { ...PRICING_DEFAULTS.binding, ...res.pricingRates.binding },
+            lamination: { ...PRICING_DEFAULTS.lamination, ...res.pricingRates.lamination },
+            coverSheet: { ...PRICING_DEFAULTS.coverSheet, ...res.pricingRates.coverSheet },
+            paperBase: { ...PRICING_DEFAULTS.paperBase, ...res.pricingRates.paperBase }
+          });
         }
       })
       .catch(() => {});
@@ -224,7 +232,7 @@ export default function UploadPage({ onNavigate }) {
           {/* Left Column: File Upload & Finishing Preferences */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', minWidth: 0 }}>
             <FileUploader files={files} onFilesUpdated={setFiles} />
-            <PrintCustomizer options={options} onOptionsChange={setOptions} />
+            <PrintCustomizer options={options} onOptionsChange={setOptions} rates={rates} />
           </div>
 
           {/* Right Column: Dynamic Price Quote & Checkout */}

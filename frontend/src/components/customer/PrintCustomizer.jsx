@@ -1,9 +1,32 @@
 import React from 'react';
 import { Sliders, Copy, Sparkles, BookOpen, Layers } from 'lucide-react';
+import { PRICING_DEFAULTS } from '../../utils/pricingService';
 
-export default function PrintCustomizer({ options, onOptionsChange }) {
+export default function PrintCustomizer({ options, onOptionsChange, rates = PRICING_DEFAULTS }) {
   const handleChange = (key, value) => {
     onOptionsChange({ ...options, [key]: value });
+  };
+
+  // Resolve dynamic prices with safe fallback to PRICING_DEFAULTS
+  const bwRate = rates?.printMode?.bw ?? PRICING_DEFAULTS.printMode.bw;
+  const colorRate = rates?.printMode?.color ?? PRICING_DEFAULTS.printMode.color;
+
+  const bindingRates = {
+    staple: rates?.binding?.staple ?? PRICING_DEFAULTS.binding.staple,
+    spiral: rates?.binding?.spiral ?? PRICING_DEFAULTS.binding.spiral,
+    softcover: rates?.binding?.softcover ?? PRICING_DEFAULTS.binding.softcover,
+    hardcover: rates?.binding?.hardcover ?? PRICING_DEFAULTS.binding.hardcover
+  };
+
+  const laminationRates = {
+    front: rates?.lamination?.front ?? PRICING_DEFAULTS.lamination.front,
+    both: rates?.lamination?.both ?? PRICING_DEFAULTS.lamination.both,
+    full: rates?.lamination?.full ?? PRICING_DEFAULTS.lamination.full
+  };
+
+  const coverSheetRates = {
+    transparent: rates?.coverSheet?.transparent ?? PRICING_DEFAULTS.coverSheet.transparent,
+    cardboard: rates?.coverSheet?.cardboard ?? PRICING_DEFAULTS.coverSheet.cardboard
   };
 
   return (
@@ -23,8 +46,8 @@ export default function PrintCustomizer({ options, onOptionsChange }) {
           <label className="input-label">Color Mode</label>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
             {[
-              { id: 'bw', label: 'Black & White', price: '₹1.50/page' },
-              { id: 'color', label: 'Full Colour', price: '₹6.00/page' }
+              { id: 'bw', label: 'Black & White', price: `₹${bwRate.toFixed(2)}/page` },
+              { id: 'color', label: 'Full Colour', price: `₹${colorRate.toFixed(2)}/page` }
             ].map(item => (
               <button
                 key={item.id}
@@ -102,10 +125,10 @@ export default function PrintCustomizer({ options, onOptionsChange }) {
             onChange={e => handleChange('binding', e.target.value)}
           >
             <option value="none">No Binding (Loose Sheets)</option>
-            <option value="staple">Corner Staple (+₹5)</option>
-            <option value="spiral">Plastic Spiral Binding (+₹35)</option>
-            <option value="softcover">Softcover Thermal Bind (+₹65)</option>
-            <option value="hardcover">Hardcover Golden Emboss (+₹130)</option>
+            <option value="staple">Corner Staple (+₹{bindingRates.staple})</option>
+            <option value="spiral">Plastic Spiral Binding (+₹{bindingRates.spiral})</option>
+            <option value="softcover">Softcover Thermal Bind (+₹{bindingRates.softcover})</option>
+            <option value="hardcover">Hardcover Golden Emboss (+₹{bindingRates.hardcover})</option>
           </select>
         </div>
 
@@ -118,9 +141,9 @@ export default function PrintCustomizer({ options, onOptionsChange }) {
             onChange={e => handleChange('lamination', e.target.value)}
           >
             <option value="none">None</option>
-            <option value="front">Front Cover Lamination (+₹15)</option>
-            <option value="both">Front & Back Cover Lamination (+₹25)</option>
-            <option value="full">Full Document Gloss Sealed (+₹45)</option>
+            <option value="front">Front Cover Lamination (+₹{laminationRates.front})</option>
+            <option value="both">Front & Back Cover Lamination (+₹{laminationRates.both})</option>
+            <option value="full">Full Document Gloss Sealed (+₹{laminationRates.full})</option>
           </select>
         </div>
 
@@ -133,8 +156,8 @@ export default function PrintCustomizer({ options, onOptionsChange }) {
             onChange={e => handleChange('coverSheet', e.target.value)}
           >
             <option value="none">None</option>
-            <option value="transparent">Transparent OHP Front Sheet (+₹12)</option>
-            <option value="cardboard">Heavy Cardboard Back (+₹18)</option>
+            <option value="transparent">Transparent OHP Front Sheet (+₹{coverSheetRates.transparent})</option>
+            <option value="cardboard">Heavy Cardboard Back (+₹{coverSheetRates.cardboard})</option>
           </select>
         </div>
       </div>
@@ -165,3 +188,4 @@ export default function PrintCustomizer({ options, onOptionsChange }) {
     </div>
   );
 }
+
