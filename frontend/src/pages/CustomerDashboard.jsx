@@ -22,6 +22,7 @@ export default function CustomerDashboard({ onNavigate }) {
   const [tickets, setTickets] = useState([]);
   const [newTicketSubject, setNewTicketSubject] = useState('');
   const [showTicketModal, setShowTicketModal] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -97,44 +98,49 @@ export default function CustomerDashboard({ onNavigate }) {
 
   return (
     <div className="dashboard-layout" style={{ minHeight: '100vh', background: 'var(--bg-app)' }}>
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <Sidebar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        isOpen={mobileMenuOpen}
+        onClose={() => setMobileMenuOpen(false)}
+      />
 
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        <Navbar />
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <Navbar onMobileMenuToggle={() => setMobileMenuOpen(v => !v)} />
 
-        <main className="main-content" style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+        <main className="main-content" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           
           {/* TAB 1: Main Dashboard Overview */}
           {activeTab === 'dashboard' && (
             <>
               {/* Welcome Banner */}
-              <div className="card glass-panel animate-fade-in" style={{ padding: '1.75rem', background: 'linear-gradient(135deg, var(--bg-surface) 0%, var(--primary-light) 100%)' }}>
+              <div className="card glass-panel animate-fade-in" style={{ padding: '1.5rem', background: 'linear-gradient(135deg, var(--bg-surface) 0%, var(--primary-light) 100%)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
                   <div>
-                    <span className="badge badge-primary" style={{ marginBottom: '0.4rem' }}>CAMPUS CUSTOMER HUB</span>
-                    <h2 style={{ fontSize: '1.6rem', fontWeight: 800 }}>Welcome back, {user?.name || 'Student'}! 👋</h2>
-                    <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+                    <span className="badge badge-primary" style={{ marginBottom: '0.35rem' }}>CAMPUS CUSTOMER HUB</span>
+                    <h2 style={{ fontSize: '1.45rem', fontWeight: 800 }}>Welcome back, {user?.name || 'Student'}! 👋</h2>
+                    <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>
                       Ready to print your lecture notes or assignment for campus delivery?
                     </p>
                   </div>
-                  <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
                     <button className="btn btn-md btn-secondary" onClick={() => fetchOrders(true)} disabled={loading} style={{ gap: '0.4rem' }}>
-                      <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-                      {loading ? 'Refreshing...' : 'Sync Orders'}
+                      <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+                      <span className="hide-on-mobile">{loading ? 'Refreshing...' : 'Sync Orders'}</span>
                     </button>
-                    <button className="btn btn-lg btn-primary" onClick={() => onNavigate('upload')} style={{ gap: '0.5rem' }}>
-                      <UploadCloud size={20} />
-                      Print New Document
+                    <button className="btn btn-lg btn-primary" onClick={() => onNavigate('upload')} style={{ gap: '0.5rem', flex: 1 }}>
+                      <UploadCloud size={18} />
+                      <span>Print New Document</span>
                     </button>
                   </div>
                 </div>
               </div>
 
               {/* Metrics Grid */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.25rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: '1rem' }}>
                 <div className="card">
-                  <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)' }}>TOTAL ORDERS</div>
-                  <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--primary)', margin: '0.2rem 0' }}>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>TOTAL ORDERS</div>
+                  <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--primary)', margin: '0.2rem 0' }}>
                     {orders.length}
                   </div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--success)' }}>All delivered on time</div>

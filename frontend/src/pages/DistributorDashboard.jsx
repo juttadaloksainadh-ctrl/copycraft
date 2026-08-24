@@ -18,6 +18,7 @@ export default function DistributorDashboard() {
   const [activeTab, setActiveTab] = useState('distributor_dashboard');
   const [assignModalOrder, setAssignModalOrder] = useState(null);
   const [selectedDealerId, setSelectedDealerId] = useState('');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -177,21 +178,26 @@ export default function DistributorDashboard() {
 
   return (
     <div className="dashboard-layout" style={{ minHeight: '100vh', background: 'var(--bg-app)' }}>
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <Sidebar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        isOpen={mobileMenuOpen}
+        onClose={() => setMobileMenuOpen(false)}
+      />
 
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        <Navbar />
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <Navbar onMobileMenuToggle={() => setMobileMenuOpen(v => !v)} />
 
-        <main className="main-content" style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+        <main className="main-content" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
             <div>
               <span className="badge badge-primary" style={{ marginBottom: '0.3rem' }}>DISTRIBUTOR HUB</span>
-              <h2 style={{ fontSize: '1.6rem', fontWeight: 800 }}>{user?.name || 'Campus Operations Center'}</h2>
+              <h2 style={{ fontSize: '1.45rem', fontWeight: 800 }}>{user?.name || 'Campus Operations Center'}</h2>
               <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>Managing Campus Print Operations &amp; Delivery Network</p>
             </div>
             <button className="btn btn-sm btn-secondary" onClick={() => fetchDashboard(true)} disabled={loading} style={{ gap: '0.4rem' }}>
               <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
-              {loading ? 'Refreshing...' : 'Sync Analytics'}
+              <span className="hide-on-mobile">{loading ? 'Refreshing...' : 'Sync Analytics'}</span>
             </button>
           </div>
 
@@ -199,7 +205,7 @@ export default function DistributorDashboard() {
           {activeTab === 'distributor_dashboard' && (
             <>
               {/* Metrics Overview Cards */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.25rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: '1rem' }}>
                 <div className="card">
                   <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)' }}>TOTAL COLLEGES</div>
                   <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--primary)', margin: '0.2rem 0' }}>

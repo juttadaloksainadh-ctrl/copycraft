@@ -59,40 +59,42 @@ export default function DataTable({
   };
 
   return (
-    <div className="card" style={{ padding: '1.25rem' }}>
+    <div className="card data-table-container" style={{ padding: '1.25rem' }}>
       {/* Top Header & Action Controls */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
-        <h4 style={{ fontSize: '1.05rem', fontWeight: 700 }}>{title} ({filteredData.length})</h4>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem' }}>
+        <h4 style={{ fontSize: '1rem', fontWeight: 700 }}>{title} ({filteredData.length})</h4>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', width: 'auto' }}>
           {/* Search Box */}
-          <div style={{ position: 'relative', width: '240px' }}>
-            <Search size={15} color="var(--text-muted)" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
+          <div style={{ position: 'relative', minWidth: '180px', flex: '1 1 auto' }}>
+            <Search size={14} color="var(--text-muted)" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
             <input
               type="text"
               className="input-field"
               placeholder={searchPlaceholder}
               value={searchTerm}
               onChange={e => { setSearchTerm(e.target.value); setCurrentPage(1); }}
-              style={{ paddingLeft: '32px', paddingTop: '0.4rem', paddingBottom: '0.4rem', fontSize: '0.85rem' }}
+              style={{ paddingLeft: '32px', paddingTop: '0.35rem', paddingBottom: '0.35rem', fontSize: '0.825rem' }}
             />
           </div>
 
           {/* Export Buttons */}
-          <button className="btn btn-sm btn-secondary" onClick={handleExportCSV} title="Export CSV">
-            <FileSpreadsheet size={15} color="var(--success)" />
-            <span>CSV</span>
-          </button>
-          <button className="btn btn-sm btn-secondary" onClick={handleExportPDF} title="Export PDF">
-            <FileText size={15} color="var(--danger)" />
-            <span>PDF</span>
-          </button>
+          <div style={{ display: 'flex', gap: '0.35rem' }}>
+            <button className="btn btn-sm btn-secondary" onClick={handleExportCSV} title="Export CSV" style={{ padding: '0.35rem 0.65rem' }}>
+              <FileSpreadsheet size={14} color="var(--success)" />
+              <span style={{ fontSize: '0.78rem' }}>CSV</span>
+            </button>
+            <button className="btn btn-sm btn-secondary" onClick={handleExportPDF} title="Export PDF" style={{ padding: '0.35rem 0.65rem' }}>
+              <FileText size={14} color="var(--danger)" />
+              <span style={{ fontSize: '0.78rem' }}>PDF</span>
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Table Structure */}
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+      <div className="mobile-scroll-x" style={{ overflowX: 'auto', width: '100%', WebkitOverflowScrolling: 'touch' }}>
+        <table style={{ width: '100%', minWidth: '480px', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
           <thead>
             <tr style={{ borderBottom: '2px solid var(--border-color)', textAlign: 'left' }}>
               {columns.map((col, idx) => (
@@ -100,7 +102,7 @@ export default function DataTable({
                   key={idx}
                   onClick={() => col.accessor && handleSort(col.accessor)}
                   style={{
-                    padding: '0.75rem 0.6rem',
+                    padding: '0.65rem 0.5rem',
                     fontWeight: 700,
                     color: 'var(--text-muted)',
                     cursor: col.accessor ? 'pointer' : 'default',
@@ -126,7 +128,7 @@ export default function DataTable({
                   }}
                 >
                   {columns.map((col, colIndex) => (
-                    <td key={colIndex} style={{ padding: '0.75rem 0.6rem', color: 'var(--text-main)' }}>
+                    <td key={colIndex} style={{ padding: '0.65rem 0.5rem', color: 'var(--text-main)' }}>
                       {col.cell ? col.cell(row) : row[col.accessor]}
                     </td>
                   ))}
@@ -134,7 +136,7 @@ export default function DataTable({
               ))
             ) : (
               <tr>
-                <td colSpan={columns.length} style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--text-muted)' }}>
+                <td colSpan={columns.length} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
                   No matching records found.
                 </td>
               </tr>
@@ -144,7 +146,7 @@ export default function DataTable({
       </div>
 
       {/* Pagination Footer */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border-color)', fontSize: '0.85rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border-color)', fontSize: '0.825rem' }}>
         <span style={{ color: 'var(--text-muted)' }}>
           Showing {sortedData.length > 0 ? (currentPage - 1) * pageSize + 1 : 0} to {Math.min(currentPage * pageSize, sortedData.length)} of {sortedData.length} entries
         </span>
@@ -153,18 +155,20 @@ export default function DataTable({
             className="btn btn-sm btn-secondary"
             disabled={currentPage === 1}
             onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+            style={{ padding: '0.35rem 0.6rem' }}
           >
-            <ChevronLeft size={16} />
+            <ChevronLeft size={15} />
           </button>
-          <span style={{ fontWeight: 600, padding: '0 0.5rem' }}>
+          <span style={{ fontWeight: 600, padding: '0 0.35rem' }}>
             Page {currentPage} of {totalPages}
           </span>
           <button
             className="btn btn-sm btn-secondary"
             disabled={currentPage === totalPages}
             onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+            style={{ padding: '0.35rem 0.6rem' }}
           >
-            <ChevronRight size={16} />
+            <ChevronRight size={15} />
           </button>
         </div>
       </div>

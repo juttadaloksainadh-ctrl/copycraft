@@ -48,61 +48,63 @@ export default function OrderTracker({ order }) {
       </div>
 
       {/* Interactive Timeline Progress */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative', padding: '1rem 0' }}>
-        {/* Background Line */}
-        <div style={{
-          position: 'absolute',
-          top: '50%',
-          left: '5%',
-          right: '5%',
-          height: '4px',
-          background: 'var(--border-color)',
-          zIndex: 1,
-          transform: 'translateY(-50%)'
-        }}>
+      <div className="mobile-scroll-x" style={{ overflowX: 'auto', width: '100%', WebkitOverflowScrolling: 'touch', padding: '0.5rem 0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative', minWidth: '460px', padding: '1rem 0.5rem' }}>
+          {/* Background Line */}
           <div style={{
-            height: '100%',
-            width: `${(Math.max(0, currentIndex) / (steps.length - 1)) * 100}%`,
-            background: 'var(--primary)',
-            transition: 'width 0.4s ease'
-          }} />
-        </div>
+            position: 'absolute',
+            top: '32px',
+            left: '5%',
+            right: '5%',
+            height: '4px',
+            background: 'var(--border-color)',
+            zIndex: 1,
+            transform: 'translateY(-50%)'
+          }}>
+            <div style={{
+              height: '100%',
+              width: `${(Math.max(0, currentIndex) / (steps.length - 1)) * 100}%`,
+              background: 'var(--primary)',
+              transition: 'width 0.4s ease'
+            }} />
+          </div>
 
-        {/* Step Nodes */}
-        {steps.map((step, idx) => {
-          const isCompleted = idx <= currentIndex;
-          const isCurrent = idx === currentIndex;
-          const Icon = step.icon;
+          {/* Step Nodes */}
+          {steps.map((step, idx) => {
+            const isCompleted = idx <= currentIndex;
+            const isCurrent = idx === currentIndex;
+            const Icon = step.icon;
 
-          return (
-            <div key={step.status} style={{ zIndex: 2, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.4rem' }}>
-              <div style={{
-                width: '38px',
-                height: '38px',
-                borderRadius: '50%',
-                background: isCompleted ? 'var(--primary)' : 'var(--bg-surface)',
-                color: isCompleted ? '#FFFFFF' : 'var(--text-muted)',
-                border: `2px solid ${isCompleted ? 'var(--primary)' : 'var(--border-color)'}`,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: isCurrent ? '0 0 0 4px var(--primary-light)' : 'none',
-                transition: 'all var(--transition-fast)'
-              }}>
-                <Icon size={18} />
+            return (
+              <div key={step.status} style={{ zIndex: 2, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.4rem' }}>
+                <div style={{
+                  width: '38px',
+                  height: '38px',
+                  borderRadius: '50%',
+                  background: isCompleted ? 'var(--primary)' : 'var(--bg-surface)',
+                  color: isCompleted ? '#FFFFFF' : 'var(--text-muted)',
+                  border: `2px solid ${isCompleted ? 'var(--primary)' : 'var(--border-color)'}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: isCurrent ? '0 0 0 4px var(--primary-light)' : 'none',
+                  transition: 'all var(--transition-fast)'
+                }}>
+                  <Icon size={18} />
+                </div>
+                <span style={{
+                  fontSize: '0.75rem',
+                  fontWeight: isCurrent ? 800 : 500,
+                  color: isCurrent ? 'var(--primary)' : 'var(--text-muted)',
+                  textAlign: 'center',
+                  maxWidth: '85px'
+                }}>
+                  {step.label}
+                </span>
               </div>
-              <span style={{
-                fontSize: '0.75rem',
-                fontWeight: isCurrent ? 800 : 500,
-                color: isCurrent ? 'var(--primary)' : 'var(--text-muted)',
-                textAlign: 'center',
-                maxWidth: '85px'
-              }}>
-                {step.label}
-              </span>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
 
       {/* Order Logs / History Notes */}

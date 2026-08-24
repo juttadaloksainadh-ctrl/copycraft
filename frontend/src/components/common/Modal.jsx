@@ -28,16 +28,16 @@ export default function Modal({ isOpen, onClose, title, children, maxWidth = '55
       justifyContent: 'center',
       background: 'rgba(15, 23, 42, 0.65)',
       backdropFilter: 'blur(6px)',
-      padding: '1rem'
+      padding: '0.75rem'
     }}>
       <div className="card animate-fade-in" style={{
         width: '100%',
-        maxWidth,
+        maxWidth: `min(94vw, ${maxWidth})`,
         maxHeight: '90vh',
         overflowY: 'auto',
         position: 'relative',
         boxShadow: 'var(--shadow-lg)',
-        padding: '1.75rem'
+        padding: '1.25rem'
       }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>

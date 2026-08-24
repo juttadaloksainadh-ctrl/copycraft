@@ -90,10 +90,12 @@ export default function ProfileModal({ onClose }) {
       <div
         className="card animate-fade-in"
         style={{
-          width: '100%', maxWidth: '520px',
+          width: '100%', maxWidth: 'min(94vw, 520px)',
+          maxHeight: '92vh',
+          overflowY: 'auto',
           borderRadius: '20px',
-          overflow: 'hidden',
-          boxShadow: '0 32px 80px rgba(0,0,0,0.4)'
+          boxShadow: '0 32px 80px rgba(0,0,0,0.4)',
+          padding: 0
         }}
       >
         {/* Header Banner */}

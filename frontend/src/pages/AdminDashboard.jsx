@@ -36,6 +36,7 @@ export default function AdminDashboard() {
   const [colleges, setColleges] = useState([]);
   const [orders, setOrders] = useState([]);
   const [activeTab, setActiveTab] = useState('admin_dashboard');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Modals state
@@ -356,21 +357,26 @@ export default function AdminDashboard() {
 
   return (
     <div className="dashboard-layout" style={{ minHeight: '100vh', background: 'var(--bg-app)' }}>
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <Sidebar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        isOpen={mobileMenuOpen}
+        onClose={() => setMobileMenuOpen(false)}
+      />
 
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        <Navbar />
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <Navbar onMobileMenuToggle={() => setMobileMenuOpen(v => !v)} />
 
-        <main className="main-content" style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+        <main className="main-content" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           
           {/* Executive Header */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
             <div>
               <span className="badge badge-primary" style={{ marginBottom: '0.3rem' }}>EXECUTIVE COMMAND CENTER</span>
-              <h2 style={{ fontSize: '1.6rem', fontWeight: 800 }}>CopyCraft Enterprise Analytics</h2>
+              <h2 style={{ fontSize: '1.45rem', fontWeight: 800 }}>CopyCraft Enterprise Analytics</h2>
               <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>Real-time revenue, multi-campus growth & infrastructure monitoring</p>
             </div>
-            <div style={{ display: 'flex', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
               {activeTab === 'users' && (
                 <button className="btn btn-sm btn-primary" onClick={() => setShowStaffModal(true)} style={{ gap: '0.4rem' }}>
                   <Plus size={16} /> Create Staff Account
@@ -388,7 +394,7 @@ export default function AdminDashboard() {
               )}
               <button className="btn btn-sm btn-secondary" onClick={() => fetchAdminData(true)} disabled={loading} style={{ gap: '0.4rem' }}>
                 <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
-                {loading ? 'Refreshing...' : 'Sync Data'}
+                <span className="hide-on-mobile">{loading ? 'Refreshing...' : 'Sync Data'}</span>
               </button>
             </div>
           </div>
@@ -397,7 +403,7 @@ export default function AdminDashboard() {
           {activeTab === 'admin_dashboard' && (
             <>
               {/* Business Metrics Grid */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.25rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: '1rem' }}>
                 <div className="card">
                   <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)' }}>TOTAL REVENUE</div>
                   <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--success)', margin: '0.2rem 0' }}>

@@ -147,75 +147,96 @@ export default function Navbar({ onMobileMenuToggle }) {
 
   const currentLang = LANGUAGES.find(l => l.code === lang) || LANGUAGES[0];
 
-  return (
+
+
+      return (
     <>
-      <nav className="glass-panel" style={{
+      <nav className="glass-panel navbar-container" style={{
         position: 'sticky',
         top: 0,
         zIndex: 100,
         borderRadius: 0,
         borderBottom: '1px solid var(--border-color)',
-        padding: '0.75rem 1.5rem',
+        padding: '0.65rem 1rem',
         background: 'var(--bg-glass)'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: '0.5rem' }}>
 
-          {/* Left: Logo */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <button className="btn btn-sm btn-secondary" onClick={onMobileMenuToggle}
-              style={{ display: 'none', padding: '0.4rem' }} id="mobile-menu-btn">
+          {/* Left: Mobile Menu Toggle + Logo */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+            <button
+              className="btn btn-sm btn-secondary show-on-mobile"
+              onClick={onMobileMenuToggle}
+              style={{
+                padding: '0.45rem',
+                borderRadius: 'var(--radius-sm)',
+                minWidth: '38px',
+                minHeight: '38px',
+                display: 'none',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+              id="mobile-menu-btn"
+              title="Toggle Menu"
+            >
               <Menu size={20} />
             </button>
 
-            <a href="#" style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', textDecoration: 'none' }}>
-              <img src="/logo.png" alt="CopyCraft Logo"
-                style={{ width: '38px', height: '38px', objectFit: 'contain', borderRadius: '8px' }} />
+            <a href="#" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', textDecoration: 'none' }}>
+              <img
+                src="/logo.png"
+                alt="CopyCraft Logo"
+                style={{ width: '34px', height: '34px', objectFit: 'contain', borderRadius: '8px' }}
+              />
               <div>
-                <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 800, fontSize: '1.25rem', color: 'var(--text-main)', letterSpacing: '-0.03em' }}>
+                <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 800, fontSize: '1.15rem', color: 'var(--text-main)', letterSpacing: '-0.03em' }}>
                   CopyCraft
                 </span>
-                <span style={{ fontSize: '0.65rem', fontWeight: 700, background: 'var(--primary-light)', color: 'var(--primary)', padding: '0.1rem 0.4rem', borderRadius: 'var(--radius-full)', marginLeft: '0.4rem' }}>
+                <span className="hide-on-mobile" style={{ fontSize: '0.65rem', fontWeight: 700, background: 'var(--primary-light)', color: 'var(--primary)', padding: '0.1rem 0.4rem', borderRadius: 'var(--radius-full)', marginLeft: '0.35rem' }}>
                   ENTERPRISE
                 </span>
               </div>
             </a>
           </div>
 
-          {/* Center: Search */}
-          <div style={{ flex: 1, maxWidth: '420px', margin: '0 1.5rem' }}>
+          {/* Center: Search (Desktop Only) */}
+          <div className="hide-on-mobile" style={{ flex: 1, maxWidth: '380px', margin: '0 1rem' }}>
             <div style={{ position: 'relative' }}>
-              <Search size={16} color="var(--text-muted)"
+              <Search size={15} color="var(--text-muted)"
                 style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
               <input
                 type="text"
-                placeholder="Search orders, files, colleges, dealers..."
+                placeholder="Search orders, files, colleges..."
                 className="input-field"
-                style={{ paddingLeft: '36px', paddingTop: '0.45rem', paddingBottom: '0.45rem', fontSize: '0.875rem', borderRadius: 'var(--radius-full)', background: 'var(--bg-app)' }}
+                style={{ paddingLeft: '34px', paddingTop: '0.4rem', paddingBottom: '0.4rem', fontSize: '0.85rem', borderRadius: 'var(--radius-full)', background: 'var(--bg-app)' }}
               />
             </div>
           </div>
 
-          {/* Right: Controls */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+          {/* Right: Action Controls */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
 
             {/* Demo Role Switcher */}
             <div style={{ position: 'relative' }} ref={roleRef}>
               <button
                 className="btn btn-sm btn-secondary"
                 onClick={() => { setShowRoleMenu(v => !v); setShowNotifications(false); setShowLangMenu(false); }}
-                style={{ gap: '0.4rem', background: 'var(--primary-light)', color: 'var(--primary)', borderColor: 'var(--border-focus)' }}
+                style={{ gap: '0.3rem', padding: '0.4rem 0.65rem', background: 'var(--primary-light)', color: 'var(--primary)', borderColor: 'var(--border-focus)', fontSize: '0.78rem' }}
+                title="Switch Role"
               >
-                <ShieldAlert size={15} />
-                <span style={{ textTransform: 'capitalize' }}>{user ? user.role.replace('_', ' ') : 'Guest'}</span>
-                <ChevronDown size={14} />
+                <ShieldAlert size={14} />
+                <span className="hide-on-mobile" style={{ textTransform: 'capitalize' }}>
+                  {user ? user.role.replace('_', ' ') : 'Guest'}
+                </span>
+                <ChevronDown size={13} />
               </button>
 
               {showRoleMenu && (
                 <div className="card animate-fade-in" style={{
-                  position: 'absolute', right: 0, top: '110%', width: '210px',
+                  position: 'absolute', right: 0, top: '110%', width: '200px', maxWidth: 'calc(100vw - 1rem)',
                   padding: '0.5rem', zIndex: 200, boxShadow: 'var(--shadow-lg)'
                 }}>
-                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', padding: '0.4rem 0.6rem' }}>
+                  <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', padding: '0.35rem 0.5rem' }}>
                     SWITCH USER ROLE
                   </div>
                   {[
@@ -228,12 +249,12 @@ export default function Navbar({ onMobileMenuToggle }) {
                     <button key={item.role} onClick={() => handleRoleSwitch(item.role)}
                       style={{
                         display: 'flex', alignItems: 'center', gap: '0.6rem', width: '100%',
-                        padding: '0.5rem 0.6rem', fontSize: '0.85rem', borderRadius: 'var(--radius-sm)',
+                        padding: '0.45rem 0.6rem', fontSize: '0.82rem', borderRadius: 'var(--radius-sm)',
                         textAlign: 'left', background: 'transparent', border: 'none', cursor: 'pointer',
                         color: user?.role === item.role ? 'var(--primary)' : 'var(--text-main)',
                         fontWeight: user?.role === item.role ? 600 : 400
                       }}>
-                      <item.icon size={16} />
+                      <item.icon size={15} />
                       {item.label}
                     </button>
                   ))}
@@ -247,19 +268,18 @@ export default function Navbar({ onMobileMenuToggle }) {
                 className="btn btn-sm btn-secondary"
                 onClick={() => { setShowLangMenu(v => !v); setShowNotifications(false); setShowRoleMenu(false); }}
                 title="Change Language"
-                style={{ gap: '0.4rem', padding: '0.45rem 0.75rem', borderRadius: 'var(--radius-full)' }}
+                style={{ gap: '0.3rem', padding: '0.4rem 0.6rem', borderRadius: 'var(--radius-full)' }}
               >
-                <Globe size={16} />
-                <span style={{ fontSize: '0.78rem', fontWeight: 600 }}>{currentLang.native}</span>
-                <ChevronDown size={13} />
+                <Globe size={15} />
+                <span className="hide-on-mobile" style={{ fontSize: '0.75rem', fontWeight: 600 }}>{currentLang.native}</span>
               </button>
 
               {showLangMenu && (
                 <div className="card animate-fade-in" style={{
-                  position: 'absolute', right: 0, top: '110%', width: '185px',
+                  position: 'absolute', right: 0, top: '110%', width: '180px', maxWidth: 'calc(100vw - 1rem)',
                   padding: '0.5rem', zIndex: 200, boxShadow: 'var(--shadow-lg)'
                 }}>
-                  <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', padding: '0.3rem 0.6rem 0.5rem' }}>
+                  <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', padding: '0.3rem 0.5rem 0.4rem' }}>
                     {t('language').toUpperCase()}
                   </div>
                   {LANGUAGES.map(l => (
@@ -267,14 +287,14 @@ export default function Navbar({ onMobileMenuToggle }) {
                       onClick={() => { selectLanguage(l.code); setShowLangMenu(false); }}
                       style={{
                         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        width: '100%', padding: '0.45rem 0.7rem', fontSize: '0.85rem',
+                        width: '100%', padding: '0.4rem 0.6rem', fontSize: '0.82rem',
                         borderRadius: 'var(--radius-sm)', background: 'transparent', border: 'none',
                         cursor: 'pointer', textAlign: 'left',
                         color: lang === l.code ? 'var(--primary)' : 'var(--text-main)',
                         fontWeight: lang === l.code ? 700 : 400
                       }}>
                       <span>{l.native}</span>
-                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{l.label}</span>
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{l.label}</span>
                     </button>
                   ))}
                 </div>
@@ -286,9 +306,9 @@ export default function Navbar({ onMobileMenuToggle }) {
               className="btn btn-sm btn-secondary"
               onClick={toggleTheme}
               title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} mode`}
-              style={{ borderRadius: 'var(--radius-full)', padding: '0.5rem' }}
+              style={{ borderRadius: 'var(--radius-full)', padding: '0.45rem', minWidth: '34px', minHeight: '34px' }}
             >
-              {theme === 'dark' ? <Sun size={18} color="#F59E0B" /> : <Moon size={18} color="#2563EB" />}
+              {theme === 'dark' ? <Sun size={16} color="#F59E0B" /> : <Moon size={16} color="#2563EB" />}
             </button>
 
             {/* Notifications Bell */}
@@ -297,14 +317,14 @@ export default function Navbar({ onMobileMenuToggle }) {
                 className="btn btn-sm btn-secondary"
                 onClick={handleBellClick}
                 title={t('notifications')}
-                style={{ position: 'relative', borderRadius: 'var(--radius-full)', padding: '0.5rem' }}
+                style={{ position: 'relative', borderRadius: 'var(--radius-full)', padding: '0.45rem', minWidth: '34px', minHeight: '34px' }}
               >
-                <Bell size={18} />
+                <Bell size={16} />
                 {unreadCount > 0 && (
                   <span style={{
-                    position: 'absolute', top: '3px', right: '3px',
-                    minWidth: '16px', height: '16px', padding: '0 3px',
-                    borderRadius: '999px', fontSize: '0.6rem', fontWeight: 800,
+                    position: 'absolute', top: '2px', right: '2px',
+                    minWidth: '15px', height: '15px', padding: '0 3px',
+                    borderRadius: '999px', fontSize: '0.58rem', fontWeight: 800,
                     background: 'var(--danger, #EF4444)', color: '#fff',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     lineHeight: 1
@@ -317,8 +337,8 @@ export default function Navbar({ onMobileMenuToggle }) {
               {showNotifications && (
                 <div className="card animate-fade-in" style={{
                   position: 'absolute', right: 0, top: '110%',
-                  width: '340px', zIndex: 200, boxShadow: 'var(--shadow-lg)',
-                  maxHeight: '420px', display: 'flex', flexDirection: 'column',
+                  width: '320px', maxWidth: 'calc(100vw - 1rem)', zIndex: 200, boxShadow: 'var(--shadow-lg)',
+                  maxHeight: '400px', display: 'flex', flexDirection: 'column',
                   overflow: 'hidden', borderRadius: '16px'
                 }}>
                   {/* Notif Header */}
@@ -326,7 +346,7 @@ export default function Navbar({ onMobileMenuToggle }) {
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                     padding: '0.75rem 1rem', borderBottom: '1px solid var(--border-color)'
                   }}>
-                    <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>{t('notifications')}</span>
+                    <span style={{ fontWeight: 700, fontSize: '0.88rem' }}>{t('notifications')}</span>
                     {unreadCount > 0 && (
                       <button onClick={handleMarkAllRead}
                         style={{
@@ -334,7 +354,7 @@ export default function Navbar({ onMobileMenuToggle }) {
                           background: 'transparent', border: 'none', cursor: 'pointer',
                           color: 'var(--primary)', fontSize: '0.75rem', fontWeight: 600
                         }}>
-                        <CheckCheck size={14} /> Mark all read
+                        <CheckCheck size={14} /> Mark read
                       </button>
                     )}
                   </div>
@@ -342,12 +362,12 @@ export default function Navbar({ onMobileMenuToggle }) {
                   {/* Notif List */}
                   <div style={{ overflowY: 'auto', flex: 1 }}>
                     {loadingNotifs ? (
-                      <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                      <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
                         Loading…
                       </div>
                     ) : notifications.length === 0 ? (
-                      <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                        <Sparkles size={24} style={{ marginBottom: '0.5rem', opacity: 0.4 }} />
+                      <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+                        <Sparkles size={22} style={{ marginBottom: '0.4rem', opacity: 0.4 }} />
                         <div>{t('noNotifications')}</div>
                       </div>
                     ) : notifications.map(n => {
@@ -355,35 +375,35 @@ export default function Navbar({ onMobileMenuToggle }) {
                       const nColor = NOTIF_COLORS[n.type] || '#8B5CF6';
                       return (
                         <div key={n.id} style={{
-                          display: 'flex', gap: '0.75rem',
-                          padding: '0.75rem 1rem',
+                          display: 'flex', gap: '0.65rem',
+                          padding: '0.65rem 0.85rem',
                           borderBottom: '1px solid var(--border-color)',
                           background: n.read ? 'transparent' : `${nColor}08`,
                           transition: 'background 0.2s'
                         }}>
                           <div style={{
-                            width: '36px', height: '36px', borderRadius: '10px', flexShrink: 0,
+                            width: '32px', height: '32px', borderRadius: '8px', flexShrink: 0,
                             background: `${nColor}18`,
                             display: 'flex', alignItems: 'center', justifyContent: 'center'
                           }}>
-                            <NIcon size={16} color={nColor} />
+                            <NIcon size={15} color={nColor} />
                           </div>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{
                               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                              gap: '0.5rem', marginBottom: '0.2rem'
+                              gap: '0.5rem', marginBottom: '0.15rem'
                             }}>
-                              <span style={{ fontWeight: n.read ? 500 : 700, fontSize: '0.82rem', color: 'var(--text-main)' }}>
+                              <span style={{ fontWeight: n.read ? 500 : 700, fontSize: '0.8rem', color: 'var(--text-main)' }}>
                                 {n.title}
                               </span>
                               {!n.read && (
-                                <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: nColor, flexShrink: 0 }} />
+                                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: nColor, flexShrink: 0 }} />
                               )}
                             </div>
-                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: 1.35 }}>
                               {n.message}
                             </div>
-                            <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '0.3rem', opacity: 0.7 }}>
+                            <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '0.25rem', opacity: 0.7 }}>
                               {timeAgo(n.createdAt)}
                             </div>
                           </div>
@@ -397,26 +417,24 @@ export default function Navbar({ onMobileMenuToggle }) {
 
             {/* Profile Avatar + Logout */}
             {user ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginLeft: '0.25rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginLeft: '0.15rem' }}>
                 <button
                   onClick={() => { setShowProfile(true); setShowNotifications(false); }}
                   title={t('profile')}
                   style={{
-                    width: '36px', height: '36px', borderRadius: '50%',
+                    width: '34px', height: '34px', borderRadius: '50%',
                     background: 'linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)',
                     color: '#FFF', border: '2px solid var(--border-color)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer',
+                    fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer',
                     transition: 'transform 0.15s, box-shadow 0.15s',
                     boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
                   }}
-                  onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.08)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.2)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)'; }}
                 >
                   {(user.name || 'U').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)}
                 </button>
-                <button className="btn btn-sm btn-secondary" onClick={logout} title={t('logout')}>
-                  <LogOut size={16} />
+                <button className="btn btn-sm btn-secondary" onClick={logout} title={t('logout')} style={{ padding: '0.45rem' }}>
+                  <LogOut size={15} />
                 </button>
               </div>
             ) : (

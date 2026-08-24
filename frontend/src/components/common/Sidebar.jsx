@@ -18,10 +18,11 @@ import {
   BarChart3,
   ShieldCheck,
   Gift,
-  User
+  User,
+  X
 } from 'lucide-react';
 
-export default function Sidebar({ activeTab, setActiveTab }) {
+export default function Sidebar({ activeTab, setActiveTab, isOpen = false, onClose = () => {} }) {
   const { user } = useAuth();
   const { t } = useLanguage();
   const role = user ? user.role : 'customer';
@@ -87,20 +88,39 @@ export default function Sidebar({ activeTab, setActiveTab }) {
 
   const currentNav = navItemsByRole[role] || navItemsByRole['customer'];
 
-  return (
-    <aside style={{
-      width: '240px',
-      background: 'var(--bg-surface)',
-      borderRight: '1px solid var(--border-color)',
-      padding: '1.5rem 0.75rem',
-      display: 'flex',
-      flexDirection: 'column',
-      justify: 'space-between'
-    }}>
+  const handleNavClick = (tabId) => {
+    setActiveTab(tabId);
+    onClose();
+  };
+
+  const renderNavContent = (isMobile = false) => (
+    <>
       <div>
-        <div style={{ padding: '0 0.75rem 1rem 0.75rem', fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>
-          NAVIGATION MENU
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 0.5rem 1rem 0.5rem' }}>
+          <div style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>
+            NAVIGATION MENU
+          </div>
+          {isMobile && (
+            <button
+              onClick={onClose}
+              style={{
+                padding: '0.35rem',
+                borderRadius: 'var(--radius-sm)',
+                color: 'var(--text-muted)',
+                background: 'var(--bg-app)',
+                border: '1px solid var(--border-color)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer'
+              }}
+              title="Close Menu"
+            >
+              <X size={18} />
+            </button>
+          )}
         </div>
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
           {currentNav.map(item => {
             const Icon = item.icon;
@@ -109,13 +129,13 @@ export default function Sidebar({ activeTab, setActiveTab }) {
             return (
               <button
                 key={item.id}
-                onClick={() => setActiveTab(item.id)}
+                onClick={() => handleNavClick(item.id)}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: '0.75rem',
                   width: '100%',
-                  padding: '0.7rem 0.85rem',
+                  padding: '0.65rem 0.8rem',
                   fontSize: '0.9rem',
                   fontWeight: isActive ? 700 : 500,
                   borderRadius: 'var(--radius-md)',
@@ -125,12 +145,13 @@ export default function Sidebar({ activeTab, setActiveTab }) {
                   background: isActive
                     ? (isProfile ? '#8B5CF622' : 'var(--primary-light)')
                     : 'transparent',
-                  border: 'none', cursor: 'pointer', textAlign: 'left',
+                  border: 'none',
+                  cursor: 'pointer',
+                  textAlign: 'left',
                   transition: 'all var(--transition-fast)',
-                  // Divider before profile item
-                  marginTop: isProfile ? '0.5rem' : 0,
+                  marginTop: isProfile ? '0.4rem' : 0,
                   borderTop: isProfile ? '1px solid var(--border-color)' : 'none',
-                  paddingTop: isProfile ? '0.9rem' : '0.7rem'
+                  paddingTop: isProfile ? '0.8rem' : '0.65rem'
                 }}
               >
                 <Icon
@@ -146,10 +167,10 @@ export default function Sidebar({ activeTab, setActiveTab }) {
         </div>
       </div>
 
-      {/* College Info Card */}
-      <div className="card" style={{ padding: '0.85rem', background: 'var(--bg-app)', marginTop: '2rem' }}>
-        <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>CURRENT HUB</div>
-        <div style={{ fontSize: '0.9rem', fontWeight: 700, marginTop: '0.2rem', color: 'var(--text-main)' }}>
+      {/* Campus Station Card */}
+      <div className="card" style={{ padding: '0.85rem', background: 'var(--bg-app)', marginTop: '1.5rem' }}>
+        <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)' }}>CURRENT HUB</div>
+        <div style={{ fontSize: '0.85rem', fontWeight: 700, marginTop: '0.2rem', color: 'var(--text-main)' }}>
           {hubCollegeName || (user?.name ? `${user.name}'s Campus` : 'Campus Hub')}
         </div>
         <div style={{ fontSize: '0.75rem', color: 'var(--success)', display: 'flex', alignItems: 'center', gap: '0.3rem', marginTop: '0.3rem' }}>
@@ -157,6 +178,27 @@ export default function Sidebar({ activeTab, setActiveTab }) {
           System Online
         </div>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Desktop Persistent Sidebar */}
+      <aside className="sidebar-desktop">
+        {renderNavContent(false)}
+      </aside>
+
+      {/* Mobile Drawer Backdrop Overlay */}
+      <div
+        className={`mobile-overlay ${isOpen ? 'active' : ''}`}
+        onClick={onClose}
+      />
+
+      {/* Mobile Off-Canvas Drawer */}
+      <div className={`sidebar-mobile-drawer ${isOpen ? 'open' : ''}`}>
+        {renderNavContent(true)}
+      </div>
+    </>
   );
 }
+

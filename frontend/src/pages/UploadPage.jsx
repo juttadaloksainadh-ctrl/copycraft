@@ -220,19 +220,21 @@ export default function UploadPage({ onNavigate }) {
         </div>
 
         {/* 2-Column Responsive Form Layout */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '2rem', alignItems: 'start' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', gap: '1.5rem', alignItems: 'start' }}>
           {/* Left Column: File Upload & Finishing Preferences */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', minWidth: 0 }}>
             <FileUploader files={files} onFilesUpdated={setFiles} />
             <PrintCustomizer options={options} onOptionsChange={setOptions} />
           </div>
 
           {/* Right Column: Dynamic Price Quote & Checkout */}
-          <OrderSummary
-            quote={quote}
-            onOrderSubmit={handleOrderSubmit}
-            isSubmitting={isSubmitting}
-          />
+          <div style={{ minWidth: 0 }}>
+            <OrderSummary
+              quote={quote}
+              onOrderSubmit={handleOrderSubmit}
+              isSubmitting={isSubmitting}
+            />
+          </div>
         </div>
       </main>
 

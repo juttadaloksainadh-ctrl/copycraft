@@ -21,6 +21,7 @@ export default function DealerDashboard() {
   const [selectedOrderForPin, setSelectedOrderForPin] = useState(null);
   const [activeTab, setActiveTab] = useState('queue');
   const [filterStatus, setFilterStatus] = useState('ALL');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -126,18 +127,23 @@ export default function DealerDashboard() {
 
   return (
     <div className="dashboard-layout" style={{ minHeight: '100vh', background: 'var(--bg-app)' }}>
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <Sidebar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        isOpen={mobileMenuOpen}
+        onClose={() => setMobileMenuOpen(false)}
+      />
 
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        <Navbar />
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <Navbar onMobileMenuToggle={() => setMobileMenuOpen(v => !v)} />
 
-        <main className="main-content" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        <main className="main-content" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           
           {/* Header */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
             <div>
               <span className="badge badge-accent" style={{ marginBottom: '0.3rem' }}>DEALER OPERATIONAL HUB</span>
-              <h2 style={{ fontSize: '1.6rem', fontWeight: 800 }}>{user?.name || 'Suresh Print Hub'}</h2>
+              <h2 style={{ fontSize: '1.45rem', fontWeight: 800 }}>{user?.name || 'Suresh Print Hub'}</h2>
               <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>{collegeName ? `Campus Station • ${collegeName}` : 'Campus Print Station'}</p>
             </div>
 
