@@ -37,7 +37,7 @@ app.use(cors({
     }
 
     // Also allow common localhost and preview domains if not strictly locked down
-    if (origin.includes('localhost') || origin.includes('127.0.0.1') || origin.endsWith('.vercel.app')) {
+    if (origin.includes('localhost') || origin.includes('127.0.0.1') || origin.endsWith('.vercel.app') || origin.endsWith('.pages.dev') || origin.endsWith('.onrender.com')) {
       return callback(null, true);
     }
 
@@ -112,6 +112,21 @@ async function startServer() {
 
       // Start 48-hour post-delivery file cleanup scheduler
       startFileCleanupScheduler();
+
+      // ── Keep-Alive Self-Ping (prevents Render free tier from sleeping) ──
+      const KEEP_ALIVE_URL = process.env.RENDER_EXTERNAL_URL || process.env.BACKEND_URL;
+      if (KEEP_ALIVE_URL) {
+        const PING_INTERVAL_MS = 14 * 60 * 1000; // every 14 minutes
+        setInterval(async () => {
+          try {
+            const res = await fetch(`${KEEP_ALIVE_URL}/api/health`);
+            console.log(`🏓 Keep-alive ping: ${res.status} at ${new Date().toISOString()}`);
+          } catch (err) {
+            console.warn(`⚠️  Keep-alive ping failed: ${err.message}`);
+          }
+        }, PING_INTERVAL_MS);
+        console.log(`🏓 Keep-alive pinger active → pinging ${KEEP_ALIVE_URL}/api/health every 14 min`);
+      }
     });
   } catch (err) {
     console.error('❌ Failed to start server:', err);
