@@ -187,9 +187,20 @@ export async function createOrderRecord({ user, orderData, paymentInfo = {} }) {
   const finalCollegeId = matchedCollege ? matchedCollege.id : (collegeId || user.collegeId || '');
   const finalCollegeName = matchedCollege ? matchedCollege.name : (collegeName || 'Campus Station');
 
-  // Find assigned dealer for this college
-  const dealer = db.users.find(u => u.role === 'dealer' && u.collegeId === finalCollegeId) || db.users.find(u => u.role === 'dealer') || null;
-  const distributor = db.users.find(u => u.role === 'distributor' && u.collegeId === finalCollegeId) || db.users.find(u => u.role === 'distributor') || null;
+  // Find assigned dealer for this college (matching either collegeId or collegeIds list)
+  const dealer = db.users.find(u =>
+    u.role === 'dealer' && (
+      u.collegeId === finalCollegeId ||
+      (Array.isArray(u.collegeIds) && u.collegeIds.includes(finalCollegeId))
+    )
+  ) || db.users.find(u => u.role === 'dealer') || null;
+
+  const distributor = db.users.find(u =>
+    u.role === 'distributor' && (
+      u.collegeId === finalCollegeId ||
+      (Array.isArray(u.collegeIds) && u.collegeIds.includes(finalCollegeId))
+    )
+  ) || db.users.find(u => u.role === 'distributor') || null;
 
   // Calculate pricing aggregate for all files accurately
   const aggregateBreakdown = calculateOrderAggregateQuote(files, couponCode, referralDiscount);

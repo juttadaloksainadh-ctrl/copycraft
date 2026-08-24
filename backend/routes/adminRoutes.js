@@ -7,6 +7,7 @@ import {
   updatePricingDefaults,
   getAuditLogs,
   createStaffAccount,
+  updateStaffAccount,
   deleteStaffAccount,
   createCollege,
   updateCollege,
@@ -22,8 +23,10 @@ router.use(requireRole(['admin', 'super_admin']));
 
 router.get('/analytics', getAdminAnalytics);
 router.get('/users', getAllUsers);
+router.put('/users/:id', updateStaffAccount);
 router.delete('/users/:id', deleteStaffAccount);
 router.post('/staff', createStaffAccount);
+router.put('/staff/:id', updateStaffAccount);
 router.delete('/staff/:id', deleteStaffAccount);
 router.post('/colleges', createCollege);
 router.put('/colleges/:id', updateCollege);

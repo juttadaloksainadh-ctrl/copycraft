@@ -39,7 +39,7 @@ export const getAdminAnalytics = (req, res) => {
 
   const collegePerformance = colleges.map(c => {
     const clgOrders = orders.filter(o => o.collegeId === c.id);
-    const clgDealers = users.filter(u => u.role === 'dealer' && u.collegeId === c.id);
+    const clgDealers = users.filter(u => u.role === 'dealer' && (u.collegeId === c.id || (Array.isArray(u.collegeIds) && u.collegeIds.includes(c.id))));
     return {
       name: c.name,
       city: c.city,
@@ -179,7 +179,7 @@ export const getAuditLogs = (req, res) => {
 };
 
 export const createStaffAccount = async (req, res) => {
-  const { name, email, password, phone, role, collegeId } = req.body;
+  const { name, email, password, phone, role, collegeId, collegeIds } = req.body;
   if (!name || !email || !password || !role) {
     return res.status(400).json({ success: false, message: 'Staff name, email, password, and role are required' });
   }
@@ -191,6 +191,10 @@ export const createStaffAccount = async (req, res) => {
   const salt = bcrypt.genSaltSync(10);
   const passwordHash = bcrypt.hashSync(password, salt);
 
+  const assignedColleges = Array.isArray(collegeIds) && collegeIds.length > 0
+    ? collegeIds
+    : (collegeId ? [collegeId] : []);
+
   const newStaff = {
     id: `usr_${role}_${Date.now()}`,
     email,
@@ -198,7 +202,8 @@ export const createStaffAccount = async (req, res) => {
     name,
     phone: phone || '+91 98000 00000',
     role, // 'dealer' | 'distributor'
-    collegeId: collegeId || '',
+    collegeIds: assignedColleges,
+    collegeId: assignedColleges[0] || '',
     createdAt: new Date().toISOString()
   };
 
@@ -213,18 +218,85 @@ export const createStaffAccount = async (req, res) => {
     }
   }
 
+  const collegeNames = assignedColleges
+    .map(cid => db.colleges.find(c => c.id === cid)?.name || cid)
+    .join(', ');
+
   db.auditLogs.unshift({
     id: `log_${Date.now()}`,
     userId: req.user.id,
     userName: req.user.name,
     action: 'STAFF_CREATE',
-    details: `Created new staff account for ${name} (${role}) assigned to ${collegeId || 'Central Hub'}`,
+    details: `Created new staff account for ${name} (${role}) assigned to: ${collegeNames || 'Central Hub'}`,
     timestamp: new Date().toISOString()
   });
 
   syncDbToR2();
 
-  return res.status(201).json({ success: true, message: `${role.toUpperCase()} account created successfully`, user: { id: newStaff.id, name, email, role } });
+  return res.status(201).json({ success: true, message: `${role.toUpperCase()} account created successfully`, user: { id: newStaff.id, name, email, role, collegeIds: assignedColleges, collegeId: newStaff.collegeId } });
+};
+
+export const updateStaffAccount = async (req, res) => {
+  const { id } = req.params;
+  const { name, email, password, phone, role, collegeId, collegeIds } = req.body;
+
+  const user = db.users.find(u => u.id === id);
+  if (!user) {
+    return res.status(404).json({ success: false, message: 'User account not found' });
+  }
+
+  if (name) user.name = name;
+  if (email) user.email = email;
+  if (phone) user.phone = phone;
+  if (role && !['admin', 'super_admin'].includes(user.role)) user.role = role;
+
+  if (password && password.trim().length >= 4) {
+    const salt = bcrypt.genSaltSync(10);
+    user.passwordHash = bcrypt.hashSync(password, salt);
+  }
+
+  if (collegeIds !== undefined || collegeId !== undefined) {
+    const assignedColleges = Array.isArray(collegeIds)
+      ? collegeIds
+      : (collegeId ? [collegeId] : []);
+    user.collegeIds = assignedColleges;
+    user.collegeId = assignedColleges[0] || '';
+  }
+
+  if (isUsingMongo()) {
+    try {
+      const col = getMongoCollection('users');
+      await col.updateOne({ id }, { $set: {
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        passwordHash: user.passwordHash,
+        collegeIds: user.collegeIds,
+        collegeId: user.collegeId
+      } });
+    } catch (e) {
+      console.error('Mongo user update error:', e.message);
+    }
+  }
+
+  const collegeNames = (user.collegeIds || [])
+    .map(cid => db.colleges.find(c => c.id === cid)?.name || cid)
+    .join(', ');
+
+  db.auditLogs.unshift({
+    id: `log_${Date.now()}`,
+    userId: req.user.id,
+    userName: req.user.name,
+    action: 'STAFF_UPDATE',
+    details: `Updated staff account for ${user.name} (${user.role}). Assigned colleges: ${collegeNames || 'Central Hub'}`,
+    timestamp: new Date().toISOString()
+  });
+
+  syncDbToR2();
+
+  const { passwordHash: _, ...sanitizedUser } = user;
+  return res.json({ success: true, message: 'Staff account updated successfully', user: sanitizedUser });
 };
 
 export const deleteStaffAccount = async (req, res) => {

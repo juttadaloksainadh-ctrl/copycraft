@@ -35,9 +35,10 @@ router.get('/:orderId/:fileId/download', authenticateToken, async (req, res) => 
     }
 
     // Authorization check
-    const { role, id: userId, collegeId: userCollegeId } = req.user;
+    const { role, id: userId, collegeId: userCollegeId, collegeIds: userCollegeIds = [] } = req.user;
+    const allUserCollegeIds = Array.isArray(userCollegeIds) && userCollegeIds.length > 0 ? userCollegeIds : (userCollegeId ? [userCollegeId] : []);
     const isCustomer = role === 'customer' && order.customerId === userId;
-    const isDealer = role === 'dealer' && (order.dealerId === userId || order.collegeId === userCollegeId || !order.dealerId);
+    const isDealer = role === 'dealer' && (order.dealerId === userId || allUserCollegeIds.includes(order.collegeId) || !order.dealerId);
     const isDistributor = role === 'distributor';
     const isAdmin = role === 'admin' || role === 'super_admin';
 

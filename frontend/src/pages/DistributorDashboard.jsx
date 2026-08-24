@@ -72,10 +72,38 @@ export default function DistributorDashboard() {
   const dealerColumns = [
     { header: 'Dealer Name', accessor: 'name', cell: row => <span style={{ fontWeight: 700 }}>{row.name}</span> },
     {
-      header: 'College Station',
+      header: 'Assigned College Stations',
       cell: row => {
-        const college = data?.collegeStats?.find(c => c.id === row.collegeId);
-        return college ? college.name : (row.collegeId || 'Unassigned');
+        const assigned = Array.isArray(row.collegeIds) && row.collegeIds.length > 0
+          ? row.collegeIds
+          : (row.collegeId ? [row.collegeId] : []);
+
+        if (assigned.length === 0) return <span style={{ color: 'var(--text-muted)' }}>Unassigned</span>;
+
+        return (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
+            {assigned.map(cid => {
+              const college = data?.collegeStats?.find(c => c.id === cid);
+              return (
+                <span
+                  key={cid}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    padding: '0.15rem 0.5rem',
+                    borderRadius: '999px',
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
+                    background: 'var(--primary-light)',
+                    color: 'var(--primary)'
+                  }}
+                >
+                  {college ? college.name : cid}
+                </span>
+              );
+            })}
+          </div>
+        );
       }
     },
     {
@@ -307,7 +335,7 @@ export default function DistributorDashboard() {
               >
                 <option value="">-- Choose Print Station --</option>
                 {data?.dealers
-                  ?.filter(d => d.collegeId === assignModalOrder?.collegeId)
+                  ?.filter(d => d.collegeId === assignModalOrder?.collegeId || (Array.isArray(d.collegeIds) && d.collegeIds.includes(assignModalOrder?.collegeId)))
                   ?.map(dealer => (
                     <option key={dealer.id} value={dealer.id}>
                       {dealer.name} ({dealer.phone})

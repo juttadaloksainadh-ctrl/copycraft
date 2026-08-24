@@ -1,23 +1,30 @@
 import { db } from '../models/dbStore.js';
 
 export const getDealerQueue = (req, res) => {
-  // Dealers see orders assigned to them or unassigned in their college
+  // Dealers see orders assigned to them or unassigned in ANY of their assigned colleges
+  const userCollegeIds = Array.isArray(req.user.collegeIds) && req.user.collegeIds.length > 0
+    ? req.user.collegeIds
+    : (req.user.collegeId ? [req.user.collegeId] : []);
+
   const dealerOrders = db.orders.filter(o => 
     o.dealerId === req.user.id || 
-    (o.collegeId === req.user.collegeId && o.orderStatus !== 'CANCELLED')
+    (userCollegeIds.includes(o.collegeId) && o.orderStatus !== 'CANCELLED')
   );
 
   const inventoryItems = db.inventory.filter(i => i.dealerId === req.user.id || !i.dealerId);
 
-  // Resolve the actual college name for this dealer's assigned college
-  const assignedCollege = db.colleges.find(c => c.id === req.user.collegeId);
+  // Resolve all assigned colleges for this dealer
+  const assignedColleges = db.colleges.filter(c => userCollegeIds.includes(c.id));
+  const collegeNames = assignedColleges.map(c => c.name).join(' • ');
+  const collegeCities = [...new Set(assignedColleges.map(c => c.city))].join(', ');
 
   return res.json({
     success: true,
     orders: dealerOrders,
     inventory: inventoryItems,
-    collegeName: assignedCollege ? assignedCollege.name : null,
-    collegeCity: assignedCollege ? assignedCollege.city : null
+    collegeName: collegeNames || (assignedColleges[0]?.name ?? null),
+    collegeCity: collegeCities || (assignedColleges[0]?.city ?? null),
+    assignedColleges: assignedColleges.map(c => ({ id: c.id, name: c.name, city: c.city }))
   });
 };
 

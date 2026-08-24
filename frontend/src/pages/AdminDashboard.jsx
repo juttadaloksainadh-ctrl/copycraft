@@ -54,13 +54,14 @@ export default function AdminDashboard() {
   });
 
   // Staff Form State
+  const [editingStaff, setEditingStaff] = useState(null);
   const [staffForm, setStaffForm] = useState({
     name: '',
     email: '',
     password: '',
     phone: '',
     role: 'dealer',
-    collegeId: ''
+    collegeIds: []
   });
 
   // College Form State
@@ -153,23 +154,45 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleCreateStaff = async (e) => {
+  const handleCreateOrUpdateStaff = async (e) => {
     e.preventDefault();
     try {
-      const res = await apiFetch('/admin/staff', {
-        method: 'POST',
-        body: JSON.stringify(staffForm)
-      });
+      if (!staffForm.collegeIds || staffForm.collegeIds.length === 0) {
+        addToast('Please select at least one assigned campus for this staff account', 'warning');
+        return;
+      }
+
+      let res;
+      if (editingStaff) {
+        res = await apiFetch(`/admin/staff/${editingStaff.id}`, {
+          method: 'PUT',
+          body: JSON.stringify(staffForm)
+        });
+      } else {
+        res = await apiFetch('/admin/staff', {
+          method: 'POST',
+          body: JSON.stringify(staffForm)
+        });
+      }
+
       if (res.success) {
-        addToast(`${staffForm.role.toUpperCase()} account created successfully!`, 'success');
+        addToast(editingStaff ? `Staff account '${staffForm.name}' updated successfully!` : `${staffForm.role.toUpperCase()} account created successfully!`, 'success');
         setShowStaffModal(false);
-        setStaffForm({ name: '', email: '', password: '', phone: '', role: 'dealer', collegeId: colleges[0]?.id || '' });
+        setEditingStaff(null);
+        setStaffForm({
+          name: '',
+          email: '',
+          password: '',
+          phone: '',
+          role: 'dealer',
+          collegeIds: colleges.length > 0 ? [colleges[0].id] : []
+        });
         fetchAdminData();
       } else {
         addToast(res.message, 'error');
       }
     } catch (e) {
-      addToast('Failed to create staff account', 'error');
+      addToast('Failed to save staff account', 'error');
     }
   };
 
@@ -192,7 +215,9 @@ export default function AdminDashboard() {
     e.preventDefault();
     const payload = {
       ...collegeForm,
-      deliveryLocations: collegeForm.deliveryLocations.split(',').map(s => s.trim())
+      deliveryLocations: typeof collegeForm.deliveryLocations === 'string' 
+        ? collegeForm.deliveryLocations.split(',').map(s => s.trim()) 
+        : collegeForm.deliveryLocations
     };
 
     try {
@@ -210,25 +235,25 @@ export default function AdminDashboard() {
       }
 
       if (res.success) {
-        addToast(editingCollege ? 'College updated' : 'College added successfully', 'success');
+        addToast(editingCollege ? 'College updated successfully!' : 'College added successfully!', 'success');
         setShowCollegeModal(false);
         setEditingCollege(null);
-        setCollegeForm({ name: '', code: '', city: '', deliveryLocations: 'Hostel 4, Hostel 12, LTC Hall A' });
+        setCollegeForm({ name: '', code: '', city: '', deliveryLocations: '' });
         fetchAdminData();
       } else {
         addToast(res.message, 'error');
       }
     } catch (e) {
-      addToast('Operation failed', 'error');
+      addToast('Failed to save college station', 'error');
     }
   };
 
   const handleDeleteCollege = async (collegeId) => {
-    if (!confirm('Are you sure you want to delete this college station from the coverage map?')) return;
+    if (!confirm('Are you sure you want to delete this college station?')) return;
     try {
       const res = await apiFetch(`/admin/colleges/${collegeId}`, { method: 'DELETE' });
       if (res.success) {
-        addToast('College removed successfully', 'success');
+        addToast('College station deleted successfully', 'success');
         fetchAdminData();
       } else {
         addToast(res.message, 'error');
@@ -238,50 +263,118 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleUpdatePricing = async () => {
+  const handleSavePricing = async (e) => {
+    e.preventDefault();
+    setSavingPricing(true);
     try {
       const res = await apiFetch('/admin/pricing', {
         method: 'PUT',
         body: JSON.stringify({
           printMode: { bw: Number(pricingRates.bwRate), color: Number(pricingRates.colorRate) },
           binding: {
+            staple: 5,
             spiral: Number(pricingRates.spiralRate),
             softcover: Number(pricingRates.softcoverRate),
             hardcover: Number(pricingRates.hardcoverRate)
           },
-          lamination: {
-            front: Math.round(Number(pricingRates.laminationRate) * 0.6),
-            both: Number(pricingRates.laminationRate),
-            full: Math.round(Number(pricingRates.laminationRate) * 1.8)
-          },
-          convenienceFeeRate: Number(pricingRates.convenienceFeeRate) / 100
+          lamination: { front: 15, both: Number(pricingRates.laminationRate), full: 45 },
+          convenienceFeeRate: Number((Number(pricingRates.convenienceFeeRate) / 100).toFixed(4))
         })
       });
       if (res.success) {
-        addToast('Global pricing matrix updated successfully across all portals!', 'success');
+        addToast('Printing rates & convenience fee updated in real-time!', 'success');
         fetchAdminData();
       } else {
-        addToast(`Pricing update failed: ${res.message || JSON.stringify(res)}`, 'error');
+        addToast(res.message, 'error');
       }
     } catch (e) {
-      addToast(`Failed to update pricing: ${e.message}`, 'error');
+      addToast('Failed to update pricing rates', 'error');
+    } finally {
+      setSavingPricing(false);
     }
   };
 
-  // User columns with delete button
+  // User columns with multi-college badge and edit/delete buttons
   const userColumns = [
     { header: 'Name', accessor: 'name', cell: row => <span style={{ fontWeight: 700 }}>{row.name}</span> },
     { header: 'Email ID', accessor: 'email' },
     { header: 'Role', accessor: 'role', cell: row => <Badge status={row.role.toUpperCase()} /> },
     { header: 'Contact Phone', accessor: 'phone' },
-    { header: 'Campus assigned', cell: row => colleges.find(c => c.id === row.collegeId)?.name || 'Central Command' },
+    {
+      header: 'Assigned Campuses',
+      cell: row => {
+        if (['admin', 'super_admin'].includes(row.role)) {
+          return <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem', fontWeight: 600 }}>Central Command</span>;
+        }
+
+        const assigned = Array.isArray(row.collegeIds) && row.collegeIds.length > 0
+          ? row.collegeIds
+          : (row.collegeId ? [row.collegeId] : []);
+
+        if (assigned.length === 0) {
+          return <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>Unassigned</span>;
+        }
+
+        return (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem', maxWidth: '280px' }}>
+            {assigned.map(cid => {
+              const clg = colleges.find(c => c.id === cid);
+              return (
+                <span
+                  key={cid}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    padding: '0.15rem 0.5rem',
+                    borderRadius: '999px',
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
+                    background: 'var(--primary-light)',
+                    color: 'var(--primary)',
+                    border: '1px solid var(--border-color)'
+                  }}
+                >
+                  {clg ? clg.name : cid}
+                </span>
+              );
+            })}
+          </div>
+        );
+      }
+    },
     {
       header: 'Actions',
       cell: row => (
         !['admin', 'super_admin'].includes(row.role) ? (
-          <button className="btn btn-sm btn-danger" onClick={() => handleDeleteStaff(row.id)} style={{ gap: '0.2rem', padding: '0.25rem 0.5rem' }}>
-            <Trash2 size={13} /> Delete
-          </button>
+          <div style={{ display: 'flex', gap: '0.35rem' }}>
+            <button
+              className="btn btn-sm btn-secondary"
+              onClick={() => {
+                setEditingStaff(row);
+                setStaffForm({
+                  name: row.name || '',
+                  email: row.email || '',
+                  password: '',
+                  phone: row.phone || '',
+                  role: row.role || 'dealer',
+                  collegeIds: Array.isArray(row.collegeIds) && row.collegeIds.length > 0
+                    ? row.collegeIds
+                    : (row.collegeId ? [row.collegeId] : [])
+                });
+                setShowStaffModal(true);
+              }}
+              style={{ padding: '0.25rem 0.5rem' }}
+            >
+              <Edit size={13} /> Edit
+            </button>
+            <button
+              className="btn btn-sm btn-danger"
+              onClick={() => handleDeleteStaff(row.id)}
+              style={{ gap: '0.2rem', padding: '0.25rem 0.5rem' }}
+            >
+              <Trash2 size={13} /> Delete
+            </button>
+          </div>
         ) : <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 600 }}>System Protected</span>
       )
     }
@@ -378,7 +471,22 @@ export default function AdminDashboard() {
             </div>
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
               {activeTab === 'users' && (
-                <button className="btn btn-sm btn-primary" onClick={() => setShowStaffModal(true)} style={{ gap: '0.4rem' }}>
+                <button
+                  className="btn btn-sm btn-primary"
+                  onClick={() => {
+                    setEditingStaff(null);
+                    setStaffForm({
+                      name: '',
+                      email: '',
+                      password: '',
+                      phone: '',
+                      role: 'dealer',
+                      collegeIds: colleges.length > 0 ? [colleges[0].id] : []
+                    });
+                    setShowStaffModal(true);
+                  }}
+                  style={{ gap: '0.4rem' }}
+                >
                   <Plus size={16} /> Create Staff Account
                 </button>
               )}
@@ -680,9 +788,14 @@ export default function AdminDashboard() {
           </form>
         </Modal>
 
-        {/* Create Staff Account Modal */}
-        <Modal isOpen={showStaffModal} onClose={() => setShowStaffModal(false)} title="Create Staff Account" maxWidth="480px">
-          <form onSubmit={handleCreateStaff} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        {/* Create / Edit Staff Account Modal */}
+        <Modal
+          isOpen={showStaffModal}
+          onClose={() => { setShowStaffModal(false); setEditingStaff(null); }}
+          title={editingStaff ? `Edit Staff Account (${editingStaff.name})` : "Create Staff Account"}
+          maxWidth="520px"
+        >
+          <form onSubmit={handleCreateOrUpdateStaff} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div className="input-group">
               <label className="input-label">Staff Role</label>
               <select
@@ -690,7 +803,7 @@ export default function AdminDashboard() {
                 value={staffForm.role}
                 onChange={e => setStaffForm({ ...staffForm, role: e.target.value })}
               >
-                <option value="dealer">Print Dealer (Hostel station)</option>
+                <option value="dealer">Print Dealer (Hostel & Campus Station)</option>
                 <option value="distributor">Delivery Coordinator (Distributor)</option>
               </select>
             </div>
@@ -720,12 +833,14 @@ export default function AdminDashboard() {
             </div>
 
             <div className="input-group">
-              <label className="input-label">Password</label>
+              <label className="input-label">
+                Password {editingStaff && <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 400 }}>(Leave blank to keep unchanged)</span>}
+              </label>
               <input
                 type="password"
-                required
+                required={!editingStaff}
                 className="input-field"
-                placeholder="Choose password"
+                placeholder={editingStaff ? "Enter new password if changing" : "Choose password"}
                 value={staffForm.password}
                 onChange={e => setStaffForm({ ...staffForm, password: e.target.value })}
               />
@@ -743,21 +858,90 @@ export default function AdminDashboard() {
               />
             </div>
 
+            {/* Multi-College Assignment Selection */}
             <div className="input-group">
-              <label className="input-label">Assigned Campus</label>
-              <select
-                className="input-field"
-                value={staffForm.collegeId}
-                onChange={e => setStaffForm({ ...staffForm, collegeId: e.target.value })}
-              >
-                {colleges.map(c => (
-                  <option key={c.id} value={c.id}>{c.name} ({c.city})</option>
-                ))}
-              </select>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
+                <label className="input-label" style={{ marginBottom: 0 }}>
+                  Assigned Campuses ({staffForm.collegeIds?.length || 0} Selected)
+                </label>
+                <div style={{ display: 'flex', gap: '0.6rem' }}>
+                  <button
+                    type="button"
+                    onClick={() => setStaffForm({ ...staffForm, collegeIds: colleges.map(c => c.id) })}
+                    style={{ background: 'none', border: 'none', color: 'var(--primary)', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', padding: 0 }}
+                  >
+                    Select All
+                  </button>
+                  <span style={{ color: 'var(--border-color)' }}>|</span>
+                  <button
+                    type="button"
+                    onClick={() => setStaffForm({ ...staffForm, collegeIds: [] })}
+                    style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', padding: 0 }}
+                  >
+                    Clear All
+                  </button>
+                </div>
+              </div>
+
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.35rem',
+                maxHeight: '190px',
+                overflowY: 'auto',
+                padding: '0.6rem',
+                background: 'var(--bg-app)',
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--border-color)'
+              }}>
+                {colleges.length > 0 ? (
+                  colleges.map(c => {
+                    const isChecked = (staffForm.collegeIds || []).includes(c.id);
+                    return (
+                      <label
+                        key={c.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.65rem',
+                          padding: '0.45rem 0.65rem',
+                          borderRadius: 'var(--radius-sm)',
+                          background: isChecked ? 'var(--primary-light)' : 'transparent',
+                          border: isChecked ? '1px solid var(--border-focus)' : '1px solid transparent',
+                          cursor: 'pointer',
+                          fontSize: '0.85rem',
+                          fontWeight: isChecked ? 700 : 500,
+                          color: isChecked ? 'var(--primary)' : 'var(--text-main)',
+                          transition: 'all 0.15s ease'
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={e => {
+                            const current = staffForm.collegeIds || [];
+                            if (e.target.checked) {
+                              setStaffForm({ ...staffForm, collegeIds: [...current, c.id] });
+                            } else {
+                              setStaffForm({ ...staffForm, collegeIds: current.filter(id => id !== c.id) });
+                            }
+                          }}
+                          style={{ accentColor: 'var(--primary)', width: '16px', height: '16px' }}
+                        />
+                        <span style={{ flex: 1 }}>{c.name} <span style={{ opacity: 0.7, fontSize: '0.75rem' }}>({c.city})</span></span>
+                      </label>
+                    );
+                  })
+                ) : (
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', padding: '0.5rem', textAlign: 'center' }}>
+                    No colleges added yet. Please add college stations first.
+                  </div>
+                )}
+              </div>
             </div>
 
             <button type="submit" className="btn btn-lg btn-primary" style={{ marginTop: '0.5rem' }}>
-              Register Staff User
+              {editingStaff ? 'Save Staff Changes' : 'Register Staff User'}
             </button>
           </form>
         </Modal>
