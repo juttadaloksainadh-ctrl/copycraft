@@ -10,13 +10,13 @@ import OrderTracker from '../components/customer/OrderTracker';
 import Modal from '../components/common/Modal';
 import DataTable from '../components/common/DataTable';
 import ProfilePage from '../components/common/ProfilePage';
-import { Printer, UploadCloud, Clock, Gift, Phone, HelpCircle, Eye, ShieldCheck, Plus, MessageSquare, RefreshCw } from 'lucide-react';
+import { Printer, UploadCloud, Clock, Gift, Phone, HelpCircle, Eye, ShieldCheck, Plus, MessageSquare, RefreshCw, Truck } from 'lucide-react';
 
 export default function CustomerDashboard({ onNavigate }) {
   const { user } = useAuth();
   const { addToast } = useToast();
   const [orders, setOrders] = useState([]);
-  const [activeStaff, setActiveStaff] = useState([]);
+  const [assignedDistributor, setAssignedDistributor] = useState(null);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [tickets, setTickets] = useState([]);
@@ -26,7 +26,7 @@ export default function CustomerDashboard({ onNavigate }) {
 
   useEffect(() => {
     fetchOrders();
-    fetchActiveStaff();
+    fetchAssignedDistributor();
   }, []);
 
   useEffect(() => {
@@ -53,11 +53,13 @@ export default function CustomerDashboard({ onNavigate }) {
     }
   };
 
-  const fetchActiveStaff = async () => {
+  const fetchAssignedDistributor = async () => {
     try {
       const res = await apiFetch('/orders/staff/active');
-      if (res.success) {
-        setActiveStaff(res.staff || []);
+      if (res.success && res.staff && res.staff.length > 0) {
+        setAssignedDistributor(res.staff[0]);
+      } else {
+        setAssignedDistributor(null);
       }
     } catch (e) {}
   };
@@ -89,21 +91,6 @@ export default function CustomerDashboard({ onNavigate }) {
         <button className="btn btn-sm btn-secondary" onClick={() => setSelectedOrder(row)} style={{ gap: '0.3rem' }}>
           <Eye size={14} /> Track
         </button>
-      )
-    }
-  ];
-
-  const staffColumns = [
-    { header: 'Staff Name', accessor: 'name', cell: row => <span style={{ fontWeight: 700 }}>{row.name}</span> },
-    { header: 'Role', accessor: 'role', cell: row => <Badge status={row.role === 'dealer' ? 'ADEQUATE' : 'ASSIGNED'} /> },
-    { header: 'Campus Station', cell: row => row.collegeName || row.collegeId || '—' },
-    {
-      header: 'Contact Info',
-      accessor: 'phone',
-      cell: row => (
-        <span style={{ fontWeight: 600, color: 'var(--primary)' }}>
-          {row.phone}
-        </span>
       )
     }
   ];
@@ -178,14 +165,74 @@ export default function CustomerDashboard({ onNavigate }) {
                 </div>
               </div>
 
-              {/* Active Print Directory (Dealers & Distributors) */}
-              <DataTable
-                columns={staffColumns}
-                data={activeStaff}
-                title="Active Campus Print Stations & coordinators Directory"
-                searchPlaceholder="Search active stations..."
-                exportFileName="active-campus-print-staff"
-              />
+              {/* Assigned Campus Delivery Coordinator (Distributor) */}
+              <div className="card glass-panel" style={{ padding: '1.5rem', border: '1px solid var(--border-color)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem' }}>
+                  <div>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      Campus Delivery Coordinator
+                    </div>
+                    <h3 style={{ fontSize: '1.2rem', fontWeight: 800, margin: '0.25rem 0 0 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <Truck size={20} color="var(--primary)" />
+                      {assignedDistributor ? assignedDistributor.collegeName : 'Campus Delivery Dispatch'}
+                    </h3>
+                  </div>
+                  {assignedDistributor ? (
+                    <span className="badge badge-success" style={{ fontWeight: 700, fontSize: '0.75rem' }}>
+                      ● ACTIVE ON YOUR CAMPUS
+                    </span>
+                  ) : (
+                    <span className="badge badge-secondary" style={{ fontSize: '0.75rem' }}>
+                      CENTRAL DISPATCH
+                    </span>
+                  )}
+                </div>
+
+                {assignedDistributor ? (
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                    gap: '1rem',
+                    background: 'var(--bg-app)',
+                    padding: '1.25rem',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--border-color)'
+                  }}>
+                    <div>
+                      <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>DISTRIBUTOR NAME</div>
+                      <div style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-main)', marginTop: '0.2rem' }}>
+                        {assignedDistributor.name}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>CAMPUS STATION</div>
+                      <div style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--primary)', marginTop: '0.2rem' }}>
+                        {assignedDistributor.collegeName}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>COORDINATOR PHONE</div>
+                      <div style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--success)', display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.2rem' }}>
+                        <Phone size={15} />
+                        <a href={`tel:${assignedDistributor.phone}`} style={{ color: 'inherit', textDecoration: 'none' }}>
+                          {assignedDistributor.phone}
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{
+                    padding: '1rem 1.25rem',
+                    background: 'var(--bg-app)',
+                    borderRadius: 'var(--radius-md)',
+                    color: 'var(--text-muted)',
+                    fontSize: '0.88rem',
+                    border: '1px solid var(--border-color)'
+                  }}>
+                    Your orders for this campus are managed and dispatched directly by the CopyCraft delivery operations team.
+                  </div>
+                )}
+              </div>
 
               {/* Recent Orders */}
               <DataTable

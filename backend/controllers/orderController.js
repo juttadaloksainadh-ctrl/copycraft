@@ -368,16 +368,45 @@ export const getCollegesList = (req, res) => {
 };
 
 export const getActiveStaffList = (req, res) => {
+  const userCollegeId = req.user?.collegeId;
+
+  // Customers must only see the distributor assigned to their particular college
+  if (req.user?.role === 'customer') {
+    if (!userCollegeId) {
+      return res.json({ success: true, staff: [] });
+    }
+
+    const college = db.colleges.find(c => c.id === userCollegeId);
+    const assignedDistributors = db.users
+      .filter(u => u.role === 'distributor' && u.collegeId === userCollegeId)
+      .map(u => ({
+        id: u.id,
+        name: u.name,
+        role: 'distributor',
+        collegeId: u.collegeId,
+        collegeName: college ? college.name : 'Your Campus',
+        phone: u.phone,
+        status: 'active'
+      }));
+
+    return res.json({ success: true, staff: assignedDistributors });
+  }
+
+  // Admin/Staff view
   const staff = db.users
     .filter(u => u.role === 'dealer' || u.role === 'distributor')
-    .map(u => ({
-      id: u.id,
-      name: u.name,
-      role: u.role,
-      collegeId: u.collegeId,
-      phone: u.phone,
-      status: 'active'
-    }));
+    .map(u => {
+      const college = db.colleges.find(c => c.id === u.collegeId);
+      return {
+        id: u.id,
+        name: u.name,
+        role: u.role,
+        collegeId: u.collegeId,
+        collegeName: college ? college.name : '—',
+        phone: u.phone,
+        status: 'active'
+      };
+    });
   return res.json({ success: true, staff });
 };
 
