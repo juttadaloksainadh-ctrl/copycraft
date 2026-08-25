@@ -418,26 +418,118 @@ export default function AdminDashboard() {
     }
   ];
 
-  // Complete orders column detailing specs and location
+  // Complete orders column detailing specs, location, and payment details for ALL colleges
   const orderColumns = [
-    { header: 'Order ID', accessor: 'id', cell: row => <span style={{ fontWeight: 700 }}>{row.id}</span> },
-    { header: 'Customer', cell: row => <div><div>{row.customerName}</div><div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{row.customerPhone}</div></div> },
-    { header: 'College Campus', cell: row => row.collegeName || '—' },
+    { header: 'Order ID', accessor: 'id', cell: row => <span style={{ fontWeight: 700, fontFamily: 'var(--font-mono)' }}>{row.id}</span> },
+    {
+      header: 'Customer',
+      cell: row => (
+        <div>
+          <div style={{ fontWeight: 700 }}>{row.customerName}</div>
+          <div style={{ fontSize: '0.72rem', color: 'var(--primary)' }}>📞 {row.customerPhone}</div>
+        </div>
+      )
+    },
+    { header: 'College Campus', cell: row => <span style={{ fontWeight: 600 }}>{row.collegeName || '—'}</span> },
     {
       header: 'Print Specifications',
       cell: row => (
-        <div style={{ fontSize: '0.75rem', lineHeight: 1.3 }}>
+        <div style={{ fontSize: '0.75rem', lineHeight: 1.35 }}>
           {row.files?.map((f, i) => (
             <div key={i} style={{ borderBottom: i < row.files.length - 1 ? '1px solid var(--border-color)' : 'none', padding: '2px 0' }}>
-              • {f.name} ({f.pageCount || 1} pgs x {f.quantity || 1}) - <span style={{ textTransform: 'uppercase', fontWeight: 600 }}>{f.printMode}</span>, {f.binding} binding
+              • <strong>{f.name}</strong> ({f.pageCount || 1} pgs x {f.quantity || 1}) - <span style={{ textTransform: 'uppercase', fontWeight: 700, color: 'var(--primary)' }}>{f.printMode}</span>, {f.binding} binding
             </div>
           ))}
         </div>
       )
     },
-    { header: 'Delivery Location', accessor: 'deliveryLocation' },
-    { header: 'Total Paid', cell: row => <span style={{ fontWeight: 700, color: 'var(--success)' }}>₹{row.pricing?.finalPrice}</span> },
-    { header: 'Status', cell: row => <Badge status={row.orderStatus} /> }
+    { header: 'Delivery Location', accessor: 'deliveryLocation', cell: row => <span style={{ fontWeight: 600 }}>📍 {row.deliveryLocation}</span> },
+    {
+      header: 'Payment Info',
+      cell: row => {
+        const isCOD = row.paymentMethod === 'COD' || !row.paymentMethod;
+        return (
+          <div>
+            <div style={{ fontWeight: 700, color: isCOD ? '#d97706' : '#059669', fontSize: '0.78rem' }}>
+              {isCOD ? '💵 Cash on Delivery' : `💳 ${row.paymentMethod}`}
+            </div>
+            <div style={{ fontSize: '0.7rem', color: row.paymentStatus === 'PAID' ? 'var(--success)' : '#ef4444', fontWeight: 600 }}>
+              {row.paymentStatus === 'PAID' ? '✓ Paid' : '⏳ Pending'}
+            </div>
+          </div>
+        );
+      }
+    },
+    {
+      header: 'Assigned Station',
+      cell: row => (
+        <div style={{ fontSize: '0.8rem', fontWeight: 600 }}>
+          {row.dealerName || <span style={{ color: 'var(--text-muted)' }}>Unassigned</span>}
+        </div>
+      )
+    },
+    { header: 'Total Paid', cell: row => <span style={{ fontWeight: 800, color: 'var(--success)', fontSize: '0.9rem' }}>₹{row.pricing?.finalPrice || 0}</span> },
+    { header: 'Status', cell: row => <Badge status={row.orderStatus} /> },
+    {
+      header: 'Date & Time',
+      cell: row => (
+        <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+          {new Date(row.createdAt || row.timeline?.[0]?.time || Date.now()).toLocaleString()}
+        </span>
+      )
+    }
+  ];
+
+  // Customer columns for dedicated Customer Area
+  const customerColumns = [
+    { header: 'Customer Name', accessor: 'name', cell: row => <span style={{ fontWeight: 700 }}>{row.name}</span> },
+    { header: 'Email ID', accessor: 'email' },
+    { header: 'Contact Phone', accessor: 'phone' },
+    {
+      header: 'Delivery PIN',
+      cell: row => (
+        row.deliveryPin ? (
+          <span style={{
+            fontFamily: 'var(--font-mono)',
+            fontWeight: 800,
+            padding: '0.2rem 0.5rem',
+            background: 'var(--primary-light)',
+            color: 'var(--primary)',
+            borderRadius: 'var(--radius-sm)',
+            letterSpacing: '0.08em',
+            fontSize: '0.85rem'
+          }}>
+            🔑 {row.deliveryPin}
+          </span>
+        ) : <span style={{ color: 'var(--text-muted)' }}>—</span>
+      )
+    },
+    {
+      header: 'Campus College',
+      cell: row => {
+        const clg = colleges.find(c => c.id === row.collegeId);
+        return clg ? clg.name : (row.collegeId || '—');
+      }
+    },
+    {
+      header: 'Total Orders',
+      cell: row => {
+        const count = orders.filter(o => o.customerId === row.id || (o.customerPhone && o.customerPhone === row.phone)).length;
+        return (
+          <span style={{
+            fontWeight: 700,
+            fontSize: '0.78rem',
+            padding: '0.15rem 0.55rem',
+            background: 'rgba(59, 130, 246, 0.12)',
+            color: '#2563eb',
+            borderRadius: '999px'
+          }}>
+            {count} {count === 1 ? 'Order' : 'Orders'}
+          </span>
+        );
+      }
+    },
+    { header: 'Status', cell: () => <Badge status="ACTIVE" /> }
   ];
 
   const couponColumns = [
@@ -576,25 +668,36 @@ export default function AdminDashboard() {
             </>
           )}
 
-          {/* TAB 2: Complete Orders specifications & delivery location (irrespective of college) */}
+          {/* TAB 2: Complete Total Orders from all colleges */}
           {activeTab === 'orders' && (
             <DataTable
               columns={orderColumns}
               data={orders}
-              title="Global Multi-Campus Print Orders Queue"
-              searchPlaceholder="Search order ID, location, specifications..."
-              exportFileName="copycraft-global-orders-log"
+              title="Global Multi-Campus Total Orders Log"
+              searchPlaceholder="Search order ID, customer name, campus, delivery location, specs..."
+              exportFileName="copycraft-total-orders-log"
             />
           )}
 
-          {/* TAB 3: User & Staff Accounts creation / deletion */}
+          {/* TAB 3: Staff Accounts Directory (Dealers, Distributors & Admins) */}
           {activeTab === 'users' && (
             <DataTable
               columns={userColumns}
-              data={usersList}
-              title="Campus User & Staff Directory"
-              searchPlaceholder="Search name, email ID, role..."
-              exportFileName="copycraft-users-directory"
+              data={usersList.filter(u => u.role !== 'customer')}
+              title="Campus Staff & Operations Directory"
+              searchPlaceholder="Search staff name, email ID, role, assigned campus..."
+              exportFileName="copycraft-staff-directory"
+            />
+          )}
+
+          {/* TAB 4: Dedicated Customer Directory & Verification Records */}
+          {activeTab === 'customers' && (
+            <DataTable
+              columns={customerColumns}
+              data={usersList.filter(u => u.role === 'customer')}
+              title="Registered Customer Directory & Delivery PIN Records"
+              searchPlaceholder="Search customer name, email, phone, PIN, college..."
+              exportFileName="copycraft-customers-directory"
             />
           )}
 

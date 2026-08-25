@@ -19,6 +19,7 @@ import {
   ShieldCheck,
   Gift,
   User,
+  UserCheck,
   X
 } from 'lucide-react';
 
@@ -65,7 +66,9 @@ export default function Sidebar({ activeTab, setActiveTab, isOpen = false, onClo
     ],
     admin: [
       { id: 'admin_dashboard', label: 'Executive Overview', icon: LayoutDashboard },
-      { id: 'users', label: 'User Directory', icon: Users },
+      { id: 'orders', label: 'Total Orders', icon: FileText },
+      { id: 'users', label: 'Staff Directory', icon: Users },
+      { id: 'customers', label: 'Customer Area', icon: UserCheck },
       { id: 'colleges', label: 'College Network', icon: Building2 },
       { id: 'pricing', label: 'Pricing Matrix', icon: DollarSign },
       { id: 'inventory_admin', label: 'Global Stock', icon: Package },
@@ -75,7 +78,9 @@ export default function Sidebar({ activeTab, setActiveTab, isOpen = false, onClo
     ],
     super_admin: [
       { id: 'admin_dashboard', label: 'Master Dashboard', icon: LayoutDashboard },
-      { id: 'users', label: 'All Users', icon: Users },
+      { id: 'orders', label: 'Total Orders', icon: FileText },
+      { id: 'users', label: 'Staff Directory', icon: Users },
+      { id: 'customers', label: 'Customer Area', icon: UserCheck },
       { id: 'colleges', label: 'Colleges', icon: Building2 },
       { id: 'pricing', label: 'Pricing Engine', icon: DollarSign },
       { id: 'inventory_admin', label: 'Global Stock', icon: Package },
