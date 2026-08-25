@@ -9,7 +9,11 @@ import DataTable from '../components/common/DataTable';
 import Modal from '../components/common/Modal';
 import Badge from '../components/common/Badge';
 import ProfilePage from '../components/common/ProfilePage';
-import { Truck, Building2, Users, DollarSign, UserCheck, RefreshCw, Phone, ShieldCheck, CreditCard, Banknote } from 'lucide-react';
+import confetti from 'canvas-confetti';
+import {
+  Truck, Building2, Users, DollarSign, UserCheck, RefreshCw,
+  Phone, ShieldCheck, CreditCard, Banknote, CheckCircle2, Key, Check
+} from 'lucide-react';
 
 export default function DistributorDashboard() {
   const { user } = useAuth();
@@ -18,6 +22,9 @@ export default function DistributorDashboard() {
   const [activeTab, setActiveTab] = useState('distributor_dashboard');
   const [assignModalOrder, setAssignModalOrder] = useState(null);
   const [selectedDealerId, setSelectedDealerId] = useState('');
+  const [deliveringOrder, setDeliveringOrder] = useState(null);
+  const [deliveryPin, setDeliveryPin] = useState('');
+  const [isVerifyingPin, setIsVerifyingPin] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -59,6 +66,37 @@ export default function DistributorDashboard() {
       }
     } catch (e) {
       addToast('Assignment failed', 'error');
+    }
+  };
+
+  const handleVerifyDeliveryPin = async (e) => {
+    if (e) e.preventDefault();
+    if (!deliveryPin || deliveryPin.trim().length < 6) {
+      addToast('Please enter the complete 6-digit delivery PIN provided by the customer', 'warning');
+      return;
+    }
+
+    setIsVerifyingPin(true);
+    try {
+      const res = await apiFetch(`/distributor/orders/${deliveringOrder.id}/verify-delivery-pin`, {
+        method: 'POST',
+        body: JSON.stringify({ pin: deliveryPin.trim() })
+      });
+      if (res.success) {
+        try {
+          confetti({ particleCount: 90, spread: 65, origin: { y: 0.6 } });
+        } catch (_) {}
+        addToast(res.message || `Order #${deliveringOrder.id} delivered successfully!`, 'success');
+        setDeliveringOrder(null);
+        setDeliveryPin('');
+        fetchDashboard();
+      } else {
+        addToast(res.message || 'Invalid delivery PIN. Verification failed.', 'error');
+      }
+    } catch (err) {
+      addToast(err.message || 'PIN verification failed', 'error');
+    } finally {
+      setIsVerifyingPin(false);
     }
   };
 
@@ -189,18 +227,59 @@ export default function DistributorDashboard() {
     { header: 'Status', cell: row => <Badge status={row.orderStatus} /> },
     {
       header: 'Action',
-      cell: row => (
-        <button
-          className="btn btn-sm btn-secondary"
-          onClick={() => {
-            setAssignModalOrder(row);
-            setSelectedDealerId(row.dealerId || '');
-          }}
-          style={{ gap: '0.3rem', fontSize: '0.75rem' }}
-        >
-          <UserCheck size={13} /> Reassign
-        </button>
-      )
+      cell: row => {
+        const isDelivered = row.orderStatus === 'DELIVERED';
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+            {!isDelivered ? (
+              <button
+                className="btn btn-sm btn-primary"
+                onClick={() => {
+                  setDeliveringOrder(row);
+                  setDeliveryPin('');
+                }}
+                style={{
+                  gap: '0.3rem',
+                  fontSize: '0.75rem',
+                  padding: '0.3rem 0.6rem',
+                  background: 'var(--success)',
+                  borderColor: 'var(--success)'
+                }}
+                title="Deliver Order & Verify Customer PIN"
+              >
+                <ShieldCheck size={13} /> Deliver Order
+              </button>
+            ) : (
+              <span style={{
+                fontSize: '0.75rem',
+                color: 'var(--success)',
+                fontWeight: 700,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '3px',
+                padding: '0.2rem 0.5rem',
+                background: 'rgba(16, 185, 129, 0.12)',
+                borderRadius: '999px'
+              }}>
+                <CheckCircle2 size={13} /> Delivered
+              </span>
+            )}
+            {!isDelivered && (
+              <button
+                className="btn btn-sm btn-secondary"
+                onClick={() => {
+                  setAssignModalOrder(row);
+                  setSelectedDealerId(row.dealerId || '');
+                }}
+                style={{ gap: '0.3rem', fontSize: '0.75rem', padding: '0.3rem 0.55rem' }}
+                title="Reassign to another dealer"
+              >
+                <UserCheck size={13} /> Reassign
+              </button>
+            )}
+          </div>
+        );
+      }
     }
   ];
 
@@ -353,6 +432,106 @@ export default function DistributorDashboard() {
               Confirm Assignment
             </button>
           </div>
+        </Modal>
+
+        {/* Deliver Order PIN Verification Modal */}
+        <Modal
+          isOpen={!!deliveringOrder}
+          onClose={() => { setDeliveringOrder(null); setDeliveryPin(''); }}
+          title="Verify Delivery PIN & Confirm Handover"
+          maxWidth="460px"
+        >
+          {deliveringOrder && (
+            <form onSubmit={handleVerifyDeliveryPin} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', textAlign: 'center' }}>
+              <div style={{
+                width: '60px',
+                height: '60px',
+                borderRadius: '50%',
+                background: 'var(--primary-light)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto',
+                border: '2px solid var(--primary)'
+              }}>
+                <ShieldCheck size={30} color="var(--primary)" />
+              </div>
+
+              <div>
+                <h4 style={{ fontSize: '1.2rem', fontWeight: 800 }}>Order #{deliveringOrder.id}</h4>
+                <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
+                  Ask customer <strong style={{ color: 'var(--text-main)' }}>{deliveringOrder.customerName}</strong> ({deliveringOrder.customerPhone || 'N/A'}) for their <strong style={{ color: 'var(--primary)' }}>6-digit Delivery PIN</strong> at <strong style={{ color: 'var(--text-main)' }}>{deliveringOrder.deliveryLocation}</strong>.
+                </p>
+              </div>
+
+              {/* Payment Alert Banner */}
+              <div style={{
+                padding: '0.85rem 1rem',
+                borderRadius: 'var(--radius-md)',
+                background: (deliveringOrder.paymentMethod === 'COD' || !deliveringOrder.paymentMethod) ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+                border: (deliveringOrder.paymentMethod === 'COD' || !deliveringOrder.paymentMethod) ? '1px solid rgba(245, 158, 11, 0.3)' : '1px solid rgba(16, 185, 129, 0.3)',
+                textAlign: 'left'
+              }}>
+                <div style={{
+                  fontSize: '0.85rem',
+                  fontWeight: 700,
+                  color: (deliveringOrder.paymentMethod === 'COD' || !deliveringOrder.paymentMethod) ? '#d97706' : '#059669',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem'
+                }}>
+                  {(deliveringOrder.paymentMethod === 'COD' || !deliveringOrder.paymentMethod) ? (
+                    <>
+                      <Banknote size={16} /> Cash on Delivery (COD) — Collect ₹{(deliveringOrder.pricing?.finalPrice || 0).toFixed(2)}
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 size={16} /> Pre-Paid Online (₹{(deliveringOrder.pricing?.finalPrice || 0).toFixed(2)}) — No Cash Collection
+                    </>
+                  )}
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                  {(deliveringOrder.paymentMethod === 'COD' || !deliveringOrder.paymentMethod)
+                    ? 'Please collect cash from customer before handing over the documents.'
+                    : 'Customer already paid online. Safely hand over documents once PIN is verified.'}
+                </div>
+              </div>
+
+              <div className="input-group">
+                <label className="input-label" style={{ textAlign: 'center', fontWeight: 700 }}>
+                  Enter Customer's 6-Digit Delivery PIN
+                </label>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  className="input-field"
+                  placeholder="• • • • • •"
+                  maxLength={6}
+                  value={deliveryPin}
+                  onChange={e => setDeliveryPin(e.target.value.replace(/\D/g, ''))}
+                  style={{
+                    fontSize: '2rem',
+                    fontWeight: 800,
+                    letterSpacing: '0.45em',
+                    textAlign: 'center',
+                    padding: '0.75rem',
+                    fontFamily: 'var(--font-mono)'
+                  }}
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="btn btn-lg btn-primary"
+                disabled={isVerifyingPin || deliveryPin.trim().length < 6}
+                style={{ width: '100%', gap: '0.5rem', background: 'var(--success)', borderColor: 'var(--success)' }}
+              >
+                <CheckCircle2 size={18} />
+                {isVerifyingPin ? 'Verifying PIN...' : 'Verify PIN & Complete Delivery'}
+              </button>
+            </form>
+          )}
         </Modal>
 
         <Footer />

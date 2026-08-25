@@ -63,6 +63,10 @@ export const verifyDeliveryPin = (req, res) => {
   const { id } = req.params;
   const { pin } = req.body;
 
+  if (!pin || String(pin).trim().length === 0) {
+    return res.status(400).json({ success: false, message: 'Please enter the 6-digit delivery PIN' });
+  }
+
   const order = db.orders.find(o => o.id === id);
   if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
 
@@ -71,13 +75,25 @@ export const verifyDeliveryPin = (req, res) => {
   }
 
   // Look up the customer's permanent 6-digit delivery PIN
-  const customer = db.users.find(u => u.id === order.customerId);
-  if (!customer) return res.status(404).json({ success: false, message: 'Customer record not found' });
+  let customer = db.users.find(u => u.id === order.customerId);
+  if (!customer && order.customerPhone) {
+    customer = db.users.find(u => u.phone === order.customerPhone);
+  }
+  if (!customer && order.customerEmail) {
+    customer = db.users.find(u => u.email === order.customerEmail);
+  }
 
-  if (customer.deliveryPin !== String(pin)) {
+  if (!customer) {
+    return res.status(404).json({ success: false, message: 'Customer record not found for this order' });
+  }
+
+  const customerPin = String(customer.deliveryPin || order.deliveryPin || '').trim();
+  const enteredPin = String(pin).trim();
+
+  if (!customerPin || customerPin !== enteredPin) {
     return res.status(400).json({
       success: false,
-      message: 'Invalid delivery PIN. Please ask the customer for their 6-digit delivery PIN.'
+      message: 'Invalid delivery PIN. The entered PIN does not match the customer\'s verification PIN.'
     });
   }
 
@@ -91,7 +107,7 @@ export const verifyDeliveryPin = (req, res) => {
   order.timeline.push({
     status: 'DELIVERED',
     time: deliveredAt,
-    note: `Delivered and PIN verified by distributor ${req.user.name}. Payment: ${isCOD ? 'Cash collected on delivery (COD)' : `Online (${order.paymentMethod}) — pre-paid`}. Files scheduled for permanent deletion in 48h.`
+    note: `Delivered and PIN verified by delivery coordinator ${req.user.name}. Payment: ${isCOD ? 'Cash collected on delivery (COD)' : `Online (${order.paymentMethod}) — pre-paid`}.`
   });
 
   db.auditLogs.unshift({
@@ -99,18 +115,15 @@ export const verifyDeliveryPin = (req, res) => {
     userId: req.user.id,
     userName: req.user.name,
     action: 'DELIVERY_PIN_VERIFIED',
-    details: `Distributor verified delivery PIN for order ${order.id} (customer: ${customer.name}). Payment method: ${order.paymentMethod || 'COD'}. Files will be auto-deleted at ${new Date(Date.now() + 48 * 3600000).toISOString()}.`,
+    details: `Delivery coordinator verified PIN for order ${order.id} (customer: ${customer.name}). Status marked DELIVERED.`,
     timestamp: deliveredAt
   });
 
-  console.log(`   📦 Order ${order.id} DELIVERED by distributor ${req.user.name} [${order.paymentMethod || 'COD'}] — R2 files will be purged 48h from now (${new Date(Date.now() + 48 * 3600000).toLocaleString()})`);
-
   return res.json({
     success: true,
-    message: `Delivery PIN verified! Order successfully delivered. ${isCOD ? 'Cash on delivery collected.' : 'Online payment was pre-confirmed.'} Customer files will be permanently deleted in 48 hours.`,
+    message: `Delivery PIN verified! Order #${order.id} delivered successfully.`,
     order,
     paymentMethod: order.paymentMethod || 'COD',
-    paymentStatus: order.paymentStatus,
-    fileDeletionScheduledAt: new Date(Date.now() + 48 * 3600000).toISOString()
+    paymentStatus: order.paymentStatus
   });
 };
