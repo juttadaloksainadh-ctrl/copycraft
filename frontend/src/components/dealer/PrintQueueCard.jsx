@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Printer, Download, Phone, MapPin, CheckCircle, Package, Key, ArrowRight, FileText, Layers, BookOpen, Palette, Copy, Loader2 } from 'lucide-react';
+import { Printer, Download, Phone, MapPin, CheckCircle, Package, ArrowRight, FileText, Layers, BookOpen, Palette, Copy, Loader2, Send } from 'lucide-react';
 import Badge from '../common/Badge';
 import { getFileDownloadUrl } from '../../utils/api';
 import { useToast } from '../../context/ToastContext';
@@ -36,7 +36,7 @@ function SpecTag({ label, value, highlight = false }) {
   );
 }
 
-export default function PrintQueueCard({ order, onStatusChange, onVerifyPinClick }) {
+export default function PrintQueueCard({ order, onStatusChange }) {
   const { addToast } = useToast();
   const [downloadingFileId, setDownloadingFileId] = useState(null);
 
@@ -47,7 +47,6 @@ export default function PrintQueueCard({ order, onStatusChange, onVerifyPinClick
     try {
       const res = await getFileDownloadUrl(order.id, file.id);
       if (res.success && res.downloadUrl) {
-        // Trigger browser download
         const a = document.createElement('a');
         a.href = res.downloadUrl;
         a.download = res.fileName || file.name;
@@ -57,7 +56,6 @@ export default function PrintQueueCard({ order, onStatusChange, onVerifyPinClick
         document.body.removeChild(a);
         addToast(`Downloading ${file.name}...`, 'success');
       } else {
-        // Fallback: direct download link if available
         if (file.r2Url) {
           window.open(file.r2Url, '_blank');
         } else {
@@ -71,8 +69,12 @@ export default function PrintQueueCard({ order, onStatusChange, onVerifyPinClick
     }
   };
 
+  const isPendingPrint = order.orderStatus === 'ASSIGNED' || order.orderStatus === 'CREATED' || order.orderStatus === 'PRINTING';
+  const isPrinted = order.orderStatus === 'PRINTED' || order.orderStatus === 'PACKAGING';
+  const isDispatchedOrDelivered = order.orderStatus === 'OUT_FOR_DELIVERY' || order.orderStatus === 'DELIVERED';
+
   return (
-    <div className="card card-hover" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', borderLeft: `4px solid ${order.orderStatus === 'OUT_FOR_DELIVERY' ? 'var(--primary)' : 'var(--border-color)'}` }}>
+    <div className="card card-hover" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', borderLeft: `4px solid ${isDispatchedOrDelivered ? 'var(--success)' : isPrinted ? 'var(--primary)' : 'var(--border-color)'}` }}>
       {/* Header — Order ID */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
         <div>
@@ -85,7 +87,7 @@ export default function PrintQueueCard({ order, onStatusChange, onVerifyPinClick
         </div>
       </div>
 
-      {/* Sub-box: Distributor Details & Delivery Hostel/Room */}
+      {/* Sub-box: Distributor Details & Delivery Location */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', background: 'var(--bg-app)', padding: '0.75rem', borderRadius: 'var(--radius-md)', fontSize: '0.85rem', border: '1px solid var(--border-color)' }}>
         <div>
           <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>DISTRIBUTOR DETAILS</div>
@@ -164,9 +166,9 @@ export default function PrintQueueCard({ order, onStatusChange, onVerifyPinClick
         })}
       </div>
 
-      {/* Bottom Action Area: Printing Completed Button */}
+      {/* Bottom Action Area */}
       <div style={{ marginTop: 'auto', paddingTop: '0.25rem' }}>
-        {(order.orderStatus === 'ASSIGNED' || order.orderStatus === 'CREATED' || order.orderStatus === 'PRINTING') && (
+        {isPendingPrint && (
           <button
             className="btn btn-lg btn-primary"
             onClick={() => onStatusChange(order.id, 'PRINTED')}
@@ -185,68 +187,42 @@ export default function PrintQueueCard({ order, onStatusChange, onVerifyPinClick
           </button>
         )}
 
-        {order.orderStatus === 'PRINTED' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            <div style={{
-              padding: '0.6rem',
-              borderRadius: 'var(--radius-md)',
-              background: 'var(--primary-light)',
-              color: 'var(--primary)',
-              fontWeight: 700,
-              fontSize: '0.88rem',
-              textAlign: 'center',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.4rem',
-              border: '1px solid var(--border-focus)'
-            }}>
-              <CheckCircle size={16} /> Printing Completed
-            </div>
-            <button
-              className="btn btn-md btn-primary"
-              onClick={() => onStatusChange(order.id, 'OUT_FOR_DELIVERY')}
-              style={{ width: '100%', gap: '0.4rem' }}
-            >
-              <ArrowRight size={16} /> Dispatch for Delivery
-            </button>
-          </div>
-        )}
-
-        {order.orderStatus === 'PACKAGING' && (
+        {isPrinted && (
           <button
-            className="btn btn-md btn-primary"
+            className="btn btn-lg btn-primary"
             onClick={() => onStatusChange(order.id, 'OUT_FOR_DELIVERY')}
-            style={{ width: '100%', gap: '0.4rem' }}
+            style={{
+              width: '100%',
+              gap: '0.5rem',
+              fontWeight: 700,
+              fontSize: '0.95rem',
+              padding: '0.75rem',
+              background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+              boxShadow: '0 4px 14px rgba(16, 185, 129, 0.3)',
+              borderRadius: 'var(--radius-md)'
+            }}
           >
-            <ArrowRight size={16} /> Dispatch for Delivery
+            <Send size={18} /> Dispatch for Delivery
           </button>
         )}
 
-        {order.orderStatus === 'OUT_FOR_DELIVERY' && (
-          <button
-            className="btn btn-md btn-primary"
-            onClick={() => onVerifyPinClick(order)}
-            style={{ width: '100%', background: 'var(--success)', borderColor: 'var(--success)', gap: '0.4rem' }}
-          >
-            <Key size={16} /> Verify Delivery PIN
-          </button>
-        )}
-
-        {order.orderStatus === 'DELIVERED' && (
+        {isDispatchedOrDelivered && (
           <div style={{
             color: 'var(--success)',
             fontWeight: 700,
-            fontSize: '0.85rem',
+            fontSize: '0.88rem',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: '0.3rem',
-            padding: '0.6rem',
+            gap: '0.4rem',
+            padding: '0.65rem',
             background: 'rgba(16, 185, 129, 0.12)',
-            borderRadius: 'var(--radius-md)'
+            border: '1px solid rgba(16, 185, 129, 0.3)',
+            borderRadius: 'var(--radius-md)',
+            width: '100%'
           }}>
-            <CheckCircle size={16} /> Order Completed & Delivered
+            <CheckCircle size={17} />
+            {order.orderStatus === 'DELIVERED' ? 'Order Delivered to Customer' : 'Dispatched for Delivery'}
           </div>
         )}
       </div>

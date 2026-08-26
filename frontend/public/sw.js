@@ -1,4 +1,4 @@
-const CACHE_NAME = 'copycraft-v6';
+const CACHE_NAME = 'copycraft-v7';
 const ASSETS = [
   '/',
   '/index.html',

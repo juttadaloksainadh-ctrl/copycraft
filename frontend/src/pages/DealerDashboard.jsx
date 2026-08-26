@@ -6,7 +6,6 @@ import Navbar from '../components/common/Navbar';
 import Sidebar from '../components/common/Sidebar';
 import Footer from '../components/common/Footer';
 import PrintQueueCard from '../components/dealer/PrintQueueCard';
-import PinVerificationModal from '../components/dealer/PinVerificationModal';
 import Badge from '../components/common/Badge';
 import DataTable from '../components/common/DataTable';
 import ProfilePage from '../components/common/ProfilePage';
@@ -18,7 +17,6 @@ export default function DealerDashboard() {
   const [orders, setOrders] = useState([]);
   const [inventory, setInventory] = useState([]);
   const [collegeName, setCollegeName] = useState('');
-  const [selectedOrderForPin, setSelectedOrderForPin] = useState(null);
   const [activeTab, setActiveTab] = useState('queue');
   const [filterStatus, setFilterStatus] = useState('ALL');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -54,26 +52,18 @@ export default function DealerDashboard() {
         body: JSON.stringify({ status: newStatus })
       });
       if (res.success) {
-        addToast(`Order ${orderId} updated to ${newStatus}`, 'success');
+        const msg = newStatus === 'PRINTED'
+          ? `Order ${orderId} marked as PRINTED and moved to Printed Orders!`
+          : newStatus === 'OUT_FOR_DELIVERY'
+          ? `Order ${orderId} dispatched for delivery!`
+          : `Order ${orderId} status updated to ${newStatus}`;
+        addToast(msg, 'success');
         fetchDealerQueue();
       } else {
         addToast(res.message, 'error');
       }
     } catch (e) {
       addToast('Failed to update status', 'error');
-    }
-  };
-
-  const handleVerifyPin = async (orderId, pin) => {
-    const res = await apiFetch(`/dealer/orders/${orderId}/verify-pin`, {
-      method: 'POST',
-      body: JSON.stringify({ pin })
-    });
-    if (res.success) {
-      addToast('Delivery PIN verified! Order delivered successfully.', 'success');
-      fetchDealerQueue();
-    } else {
-      throw new Error(res.message || 'Invalid delivery PIN');
     }
   };
 
@@ -96,13 +86,14 @@ export default function DealerDashboard() {
     if (filterStatus === 'ALL') return true;
     if (filterStatus === 'ASSIGNED') return o.orderStatus === 'ASSIGNED' || o.orderStatus === 'CREATED' || o.orderStatus === 'PRINTING';
     if (filterStatus === 'PRINTED') return o.orderStatus === 'PRINTED' || o.orderStatus === 'PACKAGING';
+    if (filterStatus === 'DELIVERED') return o.orderStatus === 'OUT_FOR_DELIVERY' || o.orderStatus === 'DELIVERED';
     return o.orderStatus === filterStatus;
   });
 
   const lowStockAlerts = inventory.filter(i => i.status === 'LOW_STOCK' || i.status === 'CRITICAL');
 
   // Performance calculation - strictly hidden any pricing data
-  const completedOrders = orders.filter(o => o.orderStatus === 'DELIVERED');
+  const completedOrders = orders.filter(o => o.orderStatus === 'DELIVERED' || o.orderStatus === 'OUT_FOR_DELIVERY');
   const totalPagesPrinted = completedOrders.reduce((sum, o) => {
     const pages = o.files?.reduce((acc, f) => acc + (f.pageCount || 1) * (f.quantity || 1), 0) || 0;
     return sum + pages;
@@ -129,8 +120,7 @@ export default function DealerDashboard() {
 
   const pendingCount = orders.filter(o => o.orderStatus === 'ASSIGNED' || o.orderStatus === 'CREATED' || o.orderStatus === 'PRINTING').length;
   const printedCount = orders.filter(o => o.orderStatus === 'PRINTED' || o.orderStatus === 'PACKAGING').length;
-  const outForDeliveryCount = orders.filter(o => o.orderStatus === 'OUT_FOR_DELIVERY').length;
-  const deliveredCount = orders.filter(o => o.orderStatus === 'DELIVERED').length;
+  const completedCount = orders.filter(o => o.orderStatus === 'OUT_FOR_DELIVERY' || o.orderStatus === 'DELIVERED').length;
 
   return (
     <div className="dashboard-layout" style={{ minHeight: '100vh', background: 'var(--bg-app)' }}>
@@ -179,8 +169,7 @@ export default function DealerDashboard() {
                   { id: 'ALL', label: `All Orders (${orders.length})` },
                   { id: 'ASSIGNED', label: `Pending Print (${pendingCount})` },
                   { id: 'PRINTED', label: `Printed Orders (${printedCount})` },
-                  { id: 'OUT_FOR_DELIVERY', label: `Out For Delivery (${outForDeliveryCount})` },
-                  { id: 'DELIVERED', label: `Completed (${deliveredCount})` }
+                  { id: 'DELIVERED', label: `Completed (${completedCount})` }
                 ].map(tab => (
                   <button
                     key={tab.id}
@@ -192,7 +181,6 @@ export default function DealerDashboard() {
                 ))}
               </div>
 
-
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '1.25rem' }}>
                 {filteredOrders.length > 0 ? (
                   filteredOrders.map(order => (
@@ -200,7 +188,6 @@ export default function DealerDashboard() {
                       key={order.id}
                       order={order}
                       onStatusChange={handleStatusChange}
-                      onVerifyPinClick={setSelectedOrderForPin}
                     />
                   ))
                 ) : (
@@ -255,7 +242,7 @@ export default function DealerDashboard() {
               <DataTable
                 columns={[
                   { header: 'Order ID', accessor: 'id', cell: row => <span style={{ fontWeight: 700 }}>{row.id}</span> },
-                  { header: 'Completed Date', cell: row => new Date(row.timeline.find(t => t.status === 'DELIVERED')?.time || row.createdAt).toLocaleDateString() },
+                  { header: 'Completed Date', cell: row => new Date(row.timeline.find(t => t.status === 'DELIVERED' || t.status === 'OUT_FOR_DELIVERY')?.time || row.createdAt).toLocaleDateString() },
                   { header: 'Files Printed', cell: row => `${row.files?.length || 1} Document(s)` }
                 ]}
                 data={completedOrders}
@@ -285,14 +272,6 @@ export default function DealerDashboard() {
           {/* TAB: Profile */}
           {activeTab === 'profile' && <ProfilePage />}
         </main>
-
-        {/* Delivery PIN Verification Modal */}
-        <PinVerificationModal
-          isOpen={!!selectedOrderForPin}
-          onClose={() => setSelectedOrderForPin(null)}
-          order={selectedOrderForPin}
-          onVerifySuccess={handleVerifyPin}
-        />
 
         <Footer />
       </div>
