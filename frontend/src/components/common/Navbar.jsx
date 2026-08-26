@@ -168,7 +168,7 @@ export default function Navbar({ onMobileMenuToggle }) {
           {/* Left: Mobile Menu Toggle + Logo */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
             <button
-              className="btn btn-sm btn-secondary show-on-mobile"
+              className="btn btn-sm btn-secondary show-on-mobile mobile-menu-btn"
               onClick={onMobileMenuToggle}
               style={{
                 padding: '0.45rem',

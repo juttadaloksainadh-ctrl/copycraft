@@ -22,8 +22,10 @@ import {
   User,
   UserCheck,
   Download,
+  Menu,
   X
 } from 'lucide-react';
+
 
 export default function Sidebar({ activeTab, setActiveTab, isOpen = false, onClose = () => {} }) {
   const { user } = useAuth();
@@ -224,7 +226,38 @@ export default function Sidebar({ activeTab, setActiveTab, isOpen = false, onClo
       <div className={`sidebar-mobile-drawer ${isOpen ? 'open' : ''}`}>
         {renderNavContent(true)}
       </div>
+
+      {/* Mobile Native Bottom Navigation Bar */}
+      <nav className="mobile-bottom-nav">
+        {currentNav.slice(0, 4).map(item => {
+          const Icon = item.icon;
+          const isActive = activeTab === item.id;
+          return (
+            <button
+              key={item.id}
+              onClick={() => handleNavClick(item.id)}
+              className={`mobile-bottom-nav-item ${isActive ? 'active' : ''}`}
+            >
+              <Icon size={20} color={isActive ? 'var(--primary)' : 'var(--text-muted)'} />
+              <span>{item.label}</span>
+            </button>
+          );
+        })}
+        <button
+          onClick={isOpen ? onClose : () => {
+            // Trigger drawer toggle by opening drawer
+            const btn = document.querySelector('.mobile-menu-btn');
+            if (btn) btn.click();
+            else onClose();
+          }}
+          className="mobile-bottom-nav-item"
+        >
+          <Menu size={20} color="var(--text-muted)" />
+          <span>Menu</span>
+        </button>
+      </nav>
     </>
   );
 }
+
 

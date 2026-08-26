@@ -404,6 +404,10 @@ input, select, textarea {
 }
 
 /* Responsive Utilities & Breakpoints */
+.mobile-bottom-nav {
+  display: none;
+}
+
 @media (max-width: 768px) {
   .sidebar-desktop {
     display: none !important;
@@ -422,7 +426,7 @@ input, select, textarea {
   }
 
   .main-content {
-    padding: 1rem 0.75rem;
+    padding: 1rem 0.75rem 5rem 0.75rem !important;
   }
 
   .container {
@@ -437,21 +441,29 @@ input, select, textarea {
   .btn {
     padding: 0.6rem 1rem;
     font-size: 0.875rem;
+    min-height: 42px;
   }
 
   .btn-lg {
     padding: 0.75rem 1.25rem;
     font-size: 0.95rem;
+    min-height: 46px;
   }
 
   .btn-sm {
     padding: 0.35rem 0.65rem;
     font-size: 0.8rem;
+    min-height: 36px;
   }
 
-  h1 { font-size: 1.85rem !important; }
-  h2 { font-size: 1.45rem !important; }
-  h3 { font-size: 1.15rem !important; }
+  .input-field, select, input[type="text"], input[type="email"], input[type="password"], input[type="number"] {
+    min-height: 44px;
+    font-size: 16px !important;
+  }
+
+  h1 { font-size: 1.75rem !important; }
+  h2 { font-size: 1.35rem !important; }
+  h3 { font-size: 1.1rem !important; }
 
   /* Navbar on Mobile */
   .navbar-container {
@@ -462,11 +474,70 @@ input, select, textarea {
   .data-table-container {
     padding: 0.75rem !important;
   }
+
+  /* Bottom Navigation Bar for Smartphone Native Feel */
+  .mobile-bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 64px;
+    background: var(--bg-glass);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-top: 1px solid var(--border-color);
+    z-index: 990;
+    align-items: center;
+    justify-content: space-around;
+    padding: 0 0.25rem;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08);
+  }
+
+  .mobile-bottom-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    flex: 1;
+    height: 100%;
+    color: var(--text-muted);
+    font-size: 0.68rem;
+    font-weight: 600;
+    border: none;
+    background: none;
+    cursor: pointer;
+    transition: color 0.15s ease, transform 0.15s ease;
+    padding: 0.25rem 0;
+  }
+
+  .mobile-bottom-nav-item.active {
+    color: var(--primary);
+    font-weight: 800;
+  }
+
+  .mobile-bottom-nav-item:active {
+    transform: scale(0.92);
+  }
+
+  .mobile-tab-pills {
+    display: flex;
+    gap: 0.5rem;
+    overflow-x: auto;
+    padding-bottom: 0.35rem;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .mobile-tab-pills::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 @media (max-width: 480px) {
   .main-content {
-    padding: 0.75rem 0.5rem;
+    padding: 0.75rem 0.5rem 5.5rem 0.5rem !important;
   }
 
   .container {
@@ -477,4 +548,5 @@ input, select, textarea {
     padding: 0.85rem;
   }
 }
+
 

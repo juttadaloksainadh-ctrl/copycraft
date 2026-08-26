@@ -164,7 +164,8 @@ export default function DealerDashboard() {
                 </div>
               )}
 
-              <div style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto', paddingBottom: '0.25rem' }}>
+              <div className="mobile-tab-pills">
+
                 {[
                   { id: 'ALL', label: `All Orders (${orders.length})` },
                   { id: 'ASSIGNED', label: `Pending Print (${pendingCount})` },
