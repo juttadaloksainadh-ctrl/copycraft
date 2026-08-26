@@ -38,6 +38,7 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('admin_dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [savingPricing, setSavingPricing] = useState(false);
 
   // Modals state
   const [showCouponModal, setShowCouponModal] = useState(false);
@@ -592,6 +593,11 @@ export default function AdminDashboard() {
                   <Plus size={16} /> Create Promo Coupon
                 </button>
               )}
+              {activeTab === 'pricing' && (
+                <button className="btn btn-sm btn-primary" onClick={handleSavePricing} disabled={savingPricing} style={{ gap: '0.4rem' }}>
+                  <Sliders size={15} /> {savingPricing ? 'Saving Rates...' : 'Save Pricing Rates'}
+                </button>
+              )}
               <button className="btn btn-sm btn-secondary" onClick={() => fetchAdminData(true)} disabled={loading} style={{ gap: '0.4rem' }}>
                 <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
                 <span className="hide-on-mobile">{loading ? 'Refreshing...' : 'Sync Data'}</span>
@@ -720,8 +726,8 @@ export default function AdminDashboard() {
                   <Sliders size={18} color="var(--primary)" />
                   Global Dynamic Pricing Engine Matrix
                 </h4>
-                <button className="btn btn-sm btn-primary" onClick={handleUpdatePricing}>
-                  Save Pricing Rates
+                <button className="btn btn-sm btn-primary" onClick={handleSavePricing} disabled={savingPricing}>
+                  {savingPricing ? 'Saving Rates...' : 'Save Pricing Rates'}
                 </button>
               </div>
 
