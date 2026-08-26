@@ -175,3 +175,48 @@ export const verifyDeliveryPin = (req, res) => {
     paymentStatus: order.paymentStatus
   });
 };
+
+/**
+ * POST /api/distributor/orders/:id/mark-printed
+ * The distributor marks an order as PRINTED.
+ */
+export const markOrderPrinted = (req, res) => {
+  const { id } = req.params;
+  const user = req.user;
+
+  const order = db.orders.find(o => o.id === id);
+  if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
+
+  // Security Check: ensure order belongs to distributor's assigned colleges
+  const userCollegeIds = Array.isArray(user?.collegeIds) && user.collegeIds.length > 0
+    ? user.collegeIds
+    : (user?.collegeId ? [user.collegeId] : []);
+  const isSuperUser = ['admin', 'super_admin'].includes(user?.role);
+
+  if (!isSuperUser && userCollegeIds.length > 0 && !userCollegeIds.includes(order.collegeId)) {
+    return res.status(403).json({ success: false, message: 'You are not authorized to update orders for this college' });
+  }
+
+  order.orderStatus = 'PRINTED';
+  order.timeline.push({
+    status: 'PRINTED',
+    time: new Date().toISOString(),
+    note: `Order marked as PRINTED by Distributor ${user.name}`
+  });
+
+  db.auditLogs.unshift({
+    id: `log_${Date.now()}`,
+    userId: user.id,
+    userName: user.name,
+    action: 'ORDER_MARKED_PRINTED',
+    details: `Distributor ${user.name} marked order ${order.id} as PRINTED.`,
+    timestamp: new Date().toISOString()
+  });
+
+  return res.json({
+    success: true,
+    message: `Order #${order.id} marked as PRINTED!`,
+    order
+  });
+};
+

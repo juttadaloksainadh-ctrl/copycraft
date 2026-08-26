@@ -12,8 +12,9 @@ import ProfilePage from '../components/common/ProfilePage';
 import confetti from 'canvas-confetti';
 import {
   Truck, Building2, Users, DollarSign, UserCheck, RefreshCw,
-  Phone, ShieldCheck, CreditCard, Banknote, CheckCircle2, Key, Check
+  Phone, ShieldCheck, CreditCard, Banknote, CheckCircle2, Key, Check, Printer
 } from 'lucide-react';
+
 
 export default function DistributorDashboard() {
   const { user } = useAuth();
@@ -97,6 +98,22 @@ export default function DistributorDashboard() {
       addToast(err.message || 'PIN verification failed', 'error');
     } finally {
       setIsVerifyingPin(false);
+    }
+  };
+
+  const handleMarkPrinted = async (order) => {
+    try {
+      const res = await apiFetch(`/distributor/orders/${order.id}/mark-printed`, {
+        method: 'POST'
+      });
+      if (res.success) {
+        addToast(`Order #${order.id} marked as PRINTED!`, 'success');
+        fetchDashboard();
+      } else {
+        addToast(res.message || 'Failed to update order status', 'error');
+      }
+    } catch (err) {
+      addToast('Failed to mark order as printed', 'error');
     }
   };
 
@@ -229,8 +246,41 @@ export default function DistributorDashboard() {
       header: 'Action',
       cell: row => {
         const isDelivered = row.orderStatus === 'DELIVERED';
+        const isPrinted = row.orderStatus === 'PRINTED';
         return (
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+            {!isPrinted && !isDelivered && (
+              <button
+                className="btn btn-sm btn-secondary"
+                onClick={() => handleMarkPrinted(row)}
+                style={{
+                  gap: '0.3rem',
+                  fontSize: '0.75rem',
+                  padding: '0.3rem 0.6rem',
+                  background: 'var(--primary-light)',
+                  color: 'var(--primary)',
+                  borderColor: 'var(--primary)'
+                }}
+                title="Mark Order as Printed"
+              >
+                <Printer size={13} /> Order Printed
+              </button>
+            )}
+            {isPrinted && !isDelivered && (
+              <span style={{
+                fontSize: '0.75rem',
+                color: 'var(--primary)',
+                fontWeight: 700,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '3px',
+                padding: '0.2rem 0.5rem',
+                background: 'var(--primary-light)',
+                borderRadius: '999px'
+              }}>
+                <Printer size={13} /> Printed
+              </span>
+            )}
             {!isDelivered ? (
               <button
                 className="btn btn-sm btn-primary"
@@ -282,6 +332,7 @@ export default function DistributorDashboard() {
       }
     }
   ];
+
 
   return (
     <div className="dashboard-layout" style={{ minHeight: '100vh', background: 'var(--bg-app)' }}>
