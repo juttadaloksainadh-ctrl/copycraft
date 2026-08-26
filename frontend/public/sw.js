@@ -1,4 +1,4 @@
-const CACHE_NAME = 'copycraft-v4';
+const CACHE_NAME = 'copycraft-v5';
 const ASSETS = [
   '/',
   '/index.html',
@@ -7,23 +7,27 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', (event) => {
+  // Activate immediately without waiting for existing instances to close
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(ASSETS);
     })
   );
-  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
+  // Claim control of all open clients/tabs immediately
   event.waitUntil(
-    caches.keys().then((keys) => {
-      return Promise.all(
-        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
-      );
-    })
+    Promise.all([
+      self.clients.claim(),
+      caches.keys().then((keys) => {
+        return Promise.all(
+          keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
+        );
+      })
+    ])
   );
-  self.clients.claim();
 });
 
 self.addEventListener('fetch', (event) => {
@@ -34,17 +38,18 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Network-first strategy: always try network first, fall back to cache
+  // Network-first strategy: always fetch fresh from network, update cache in background
   event.respondWith(
     fetch(event.request).then((networkResponse) => {
-      // Cache the fresh response
-      const responseClone = networkResponse.clone();
-      caches.open(CACHE_NAME).then((cache) => {
-        cache.put(event.request, responseClone);
-      });
+      if (networkResponse && networkResponse.status === 200) {
+        const responseClone = networkResponse.clone();
+        caches.open(CACHE_NAME).then((cache) => {
+          cache.put(event.request, responseClone);
+        });
+      }
       return networkResponse;
     }).catch(() => {
-      // Network failed, serve from cache
+      // Network offline/failed -> fallback to cached version
       return caches.match(event.request).then((cachedResponse) => {
         if (cachedResponse) return cachedResponse;
         if (event.request.headers.get('accept')?.includes('text/html')) {

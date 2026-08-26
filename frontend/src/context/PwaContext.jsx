@@ -39,10 +39,36 @@ export function PwaProvider({ children }) {
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('appinstalled', handleAppInstalled);
 
-    // Register Service Worker
+    // Register Service Worker & handle automatic updates
     if ('serviceWorker' in navigator && (window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-      navigator.serviceWorker.register('/sw.js').catch(err => {
+      navigator.serviceWorker.register('/sw.js').then(reg => {
+        // Force check for updates on load and on tab focus
+        reg.update();
+        const handleFocus = () => reg.update();
+        window.addEventListener('focus', handleFocus);
+
+        reg.onupdatefound = () => {
+          const installingWorker = reg.installing;
+          if (installingWorker) {
+            installingWorker.onstatechange = () => {
+              if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                console.log('⚡ New CopyCraft app update detected. Reloading...');
+                window.location.reload();
+              }
+            };
+          }
+        };
+      }).catch(err => {
         console.log('ServiceWorker registration error:', err);
+      });
+
+      // Reload page immediately when controller changes
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!refreshing) {
+          refreshing = true;
+          window.location.reload();
+        }
       });
     }
 
