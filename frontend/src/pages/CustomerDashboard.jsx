@@ -10,11 +10,13 @@ import OrderTracker from '../components/customer/OrderTracker';
 import Modal from '../components/common/Modal';
 import DataTable from '../components/common/DataTable';
 import ProfilePage from '../components/common/ProfilePage';
-import { Printer, UploadCloud, Clock, Gift, Phone, HelpCircle, Eye, ShieldCheck, Plus, MessageSquare, RefreshCw, Truck } from 'lucide-react';
+import { usePwa } from '../context/PwaContext';
+import { Printer, UploadCloud, Clock, Gift, Phone, HelpCircle, Eye, ShieldCheck, Plus, MessageSquare, RefreshCw, Truck, Download } from 'lucide-react';
 
 export default function CustomerDashboard({ onNavigate }) {
   const { user } = useAuth();
   const { addToast } = useToast();
+  const { installApp, isInstalled } = usePwa();
   const [orders, setOrders] = useState([]);
   const [assignedDistributor, setAssignedDistributor] = useState(null);
   const [selectedOrder, setSelectedOrder] = useState(null);
@@ -124,6 +126,10 @@ export default function CustomerDashboard({ onNavigate }) {
                     </p>
                   </div>
                   <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <button className="btn btn-md btn-secondary" onClick={installApp} style={{ gap: '0.4rem', color: 'var(--primary)', fontWeight: 700 }}>
+                      <Download size={15} />
+                      <span className="hide-on-mobile">{isInstalled ? 'App Ready' : 'Download App'}</span>
+                    </button>
                     <button className="btn btn-md btn-secondary" onClick={() => fetchOrders(true)} disabled={loading} style={{ gap: '0.4rem' }}>
                       <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
                       <span className="hide-on-mobile">{loading ? 'Refreshing...' : 'Sync Orders'}</span>

@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { Mail, Lock, ArrowRight, ArrowLeft } from 'lucide-react';
+import { usePwa } from '../context/PwaContext';
+import { Mail, Lock, ArrowRight, ArrowLeft, Download } from 'lucide-react';
 
 export default function LoginPage({ onNavigate, selectedPortal = 'customer' }) {
   const { login } = useAuth();
   const { addToast } = useToast();
+  const { installApp, isInstalled } = usePwa();
 
 
 
@@ -127,6 +129,25 @@ export default function LoginPage({ onNavigate, selectedPortal = 'customer' }) {
           </div>
         )}
       </div>
+
+      <button
+        onClick={installApp}
+        className="btn btn-sm btn-secondary"
+        style={{
+          marginTop: '0.5rem',
+          gap: '0.45rem',
+          fontSize: '0.82rem',
+          padding: '0.45rem 0.9rem',
+          borderRadius: 'var(--radius-full)',
+          background: 'var(--bg-glass)',
+          border: '1px solid var(--border-color)',
+          color: 'var(--primary)',
+          fontWeight: 700
+        }}
+      >
+        <Download size={15} />
+        {isInstalled ? 'CopyCraft App Ready' : 'Download CopyCraft App (Mobile & PC)'}
+      </button>
     </div>
   );
 }

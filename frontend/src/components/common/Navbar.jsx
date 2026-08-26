@@ -5,6 +5,7 @@ import { useToast } from '../../context/ToastContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { apiFetch } from '../../utils/api';
 import ProfileModal from './ProfileModal';
+import { usePwa } from '../../context/PwaContext';
 import {
   Printer,
   Sun,
@@ -26,7 +27,8 @@ import {
   AlertTriangle,
   Info,
   Zap,
-  User
+  User,
+  Download
 } from 'lucide-react';
 
 const LANGUAGES = [
@@ -69,6 +71,7 @@ export default function Navbar({ onMobileMenuToggle }) {
   const { theme, toggleTheme } = useTheme();
   const { addToast } = useToast();
   const { lang, selectLanguage, t } = useLanguage();
+  const { installApp, isInstalled } = usePwa();
 
   const [showRoleMenu, setShowRoleMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -215,6 +218,27 @@ export default function Navbar({ onMobileMenuToggle }) {
 
           {/* Right: Action Controls */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+
+            {/* Install App Button */}
+            <button
+              className="btn btn-sm btn-primary"
+              onClick={installApp}
+              title="Download & Install CopyCraft App on Mobile / PC"
+              style={{
+                gap: '0.35rem',
+                padding: '0.4rem 0.65rem',
+                borderRadius: 'var(--radius-full)',
+                fontSize: '0.78rem',
+                background: 'linear-gradient(135deg, var(--primary) 0%, #6366f1 100%)',
+                color: '#FFF',
+                boxShadow: '0 2px 8px rgba(99, 102, 241, 0.3)'
+              }}
+            >
+              <Download size={14} />
+              <span className="hide-on-mobile" style={{ fontWeight: 700 }}>
+                {isInstalled ? 'App Ready' : 'Download App'}
+              </span>
+            </button>
 
             {/* Demo Role Switcher */}
             <div style={{ position: 'relative' }} ref={roleRef}>

@@ -1,0 +1,19 @@
+{
+  "short_name": "CopyCraft",
+  "name": "CopyCraft - Campus Document Printing & Express Delivery",
+  "description": "Next-generation campus document printing and express delivery platform.",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "type": "image/png",
+      "sizes": "192x192 512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0f172a",
+  "theme_color": "#4f46e5",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "categories": ["productivity", "utilities", "education"]
+}

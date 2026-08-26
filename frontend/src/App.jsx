@@ -101,6 +101,7 @@ function AppContent() {
 }
 
 import { LanguageProvider } from './context/LanguageContext';
+import { PwaProvider } from './context/PwaContext';
 
 export default function App() {
   return (
@@ -108,7 +109,9 @@ export default function App() {
       <ToastProvider>
         <AuthProvider>
           <LanguageProvider>
-            <AppContent />
+            <PwaProvider>
+              <AppContent />
+            </PwaProvider>
           </LanguageProvider>
         </AuthProvider>
       </ToastProvider>

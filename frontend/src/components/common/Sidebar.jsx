@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { apiFetch } from '../../utils/api';
 import { useLanguage } from '../../context/LanguageContext';
+import { usePwa } from '../../context/PwaContext';
 import {
   LayoutDashboard,
   UploadCloud,
@@ -20,12 +21,14 @@ import {
   Gift,
   User,
   UserCheck,
+  Download,
   X
 } from 'lucide-react';
 
 export default function Sidebar({ activeTab, setActiveTab, isOpen = false, onClose = () => {} }) {
   const { user } = useAuth();
   const { t } = useLanguage();
+  const { installApp, isInstalled } = usePwa();
   const role = user ? user.role : 'customer';
   const [hubCollegeName, setHubCollegeName] = useState('');
 
@@ -172,16 +175,34 @@ export default function Sidebar({ activeTab, setActiveTab, isOpen = false, onClo
         </div>
       </div>
 
-      {/* Campus Station Card */}
-      <div className="card" style={{ padding: '0.85rem', background: 'var(--bg-app)', marginTop: '1.5rem' }}>
-        <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)' }}>CURRENT HUB</div>
-        <div style={{ fontSize: '0.85rem', fontWeight: 700, marginTop: '0.2rem', color: 'var(--text-main)' }}>
-          {hubCollegeName || (user?.name ? `${user.name}'s Campus` : 'Campus Hub')}
+      {/* Campus Station & PWA Download Card */}
+      <div className="card" style={{ padding: '0.85rem', background: 'var(--bg-app)', marginTop: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+        <div>
+          <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)' }}>CURRENT HUB</div>
+          <div style={{ fontSize: '0.85rem', fontWeight: 700, marginTop: '0.1rem', color: 'var(--text-main)' }}>
+            {hubCollegeName || (user?.name ? `${user.name}'s Campus` : 'Campus Hub')}
+          </div>
+          <div style={{ fontSize: '0.72rem', color: 'var(--success)', display: 'flex', alignItems: 'center', gap: '0.3rem', marginTop: '0.2rem' }}>
+            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--success)' }} />
+            System Online
+          </div>
         </div>
-        <div style={{ fontSize: '0.75rem', color: 'var(--success)', display: 'flex', alignItems: 'center', gap: '0.3rem', marginTop: '0.3rem' }}>
-          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--success)' }} />
-          System Online
-        </div>
+
+        <button
+          onClick={installApp}
+          className="btn btn-sm btn-primary"
+          style={{
+            width: '100%',
+            gap: '0.4rem',
+            fontSize: '0.78rem',
+            padding: '0.45rem',
+            borderRadius: 'var(--radius-md)',
+            background: 'linear-gradient(135deg, var(--primary) 0%, #6366f1 100%)'
+          }}
+        >
+          <Download size={14} />
+          {isInstalled ? 'CopyCraft App Ready' : 'Download Mobile & PC App'}
+        </button>
       </div>
     </>
   );
