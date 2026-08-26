@@ -1,18 +1,41 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ToastProvider } from './context/ToastContext';
+import { LanguageProvider } from './context/LanguageContext';
+import { PwaProvider } from './context/PwaContext';
 
-// Pages
+// Critical pages — loaded eagerly (small, needed first)
 import PortalSelectionPage from './pages/PortalSelectionPage';
-import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
-import CustomerDashboard from './pages/CustomerDashboard';
-import DealerDashboard from './pages/DealerDashboard';
-import DistributorDashboard from './pages/DistributorDashboard';
-import AdminDashboard from './pages/AdminDashboard';
-import UploadPage from './pages/UploadPage';
+
+// Heavy pages — lazy-loaded (only fetched when the user actually navigates)
+const RegisterPage = lazy(() => import('./pages/RegisterPage'));
+const CustomerDashboard = lazy(() => import('./pages/CustomerDashboard'));
+const DealerDashboard = lazy(() => import('./pages/DealerDashboard'));
+const DistributorDashboard = lazy(() => import('./pages/DistributorDashboard'));
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const UploadPage = lazy(() => import('./pages/UploadPage'));
+const LandingPage = lazy(() => import('./pages/LandingPage'));
+
+// Loading fallback for lazy pages
+function PageLoader() {
+  return (
+    <div style={{
+      height: '100vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: 'var(--bg-app)',
+      color: 'var(--text-muted)',
+      flexDirection: 'column',
+      gap: '1rem'
+    }}>
+      <div className="pulse-skeleton" style={{ width: '48px', height: '48px', borderRadius: '50%' }} />
+      <div style={{ fontWeight: 600 }}>Loading...</div>
+    </div>
+  );
+}
 
 function AppContent() {
   const { user, loading, logout } = useAuth();
@@ -69,39 +92,44 @@ function AppContent() {
     return <LoginPage onNavigate={navigateTo} selectedPortal={selectedPortal} />;
   }
 
-  if (currentPage === 'register') {
-    return <RegisterPage onNavigate={navigateTo} />;
-  }
+  // All lazy-loaded routes wrapped in Suspense
+  return (
+    <Suspense fallback={<PageLoader />}>
+      {currentPage === 'register' && (
+        <RegisterPage onNavigate={navigateTo} />
+      )}
 
-  if (currentPage === 'upload') {
-    return <UploadPage onNavigate={navigateTo} />;
-  }
+      {currentPage === 'upload' && (
+        <UploadPage onNavigate={navigateTo} />
+      )}
 
-  if (currentPage === 'dashboard') {
-    if (!user) {
-      return <LoginPage onNavigate={navigateTo} selectedPortal={selectedPortal} />;
-    }
-    
-    // Role-based Dashboard routing
-    switch (user.role) {
-      case 'dealer':
-        return <DealerDashboard onNavigate={navigateTo} />;
-      case 'distributor':
-        return <DistributorDashboard onNavigate={navigateTo} />;
-      case 'admin':
-      case 'super_admin':
-        return <AdminDashboard onNavigate={navigateTo} />;
-      case 'customer':
-      default:
-        return <CustomerDashboard onNavigate={navigateTo} />;
-    }
-  }
+      {currentPage === 'dashboard' && (
+        !user ? (
+          <LoginPage onNavigate={navigateTo} selectedPortal={selectedPortal} />
+        ) : (
+          (() => {
+            switch (user.role) {
+              case 'dealer':
+                return <DealerDashboard onNavigate={navigateTo} />;
+              case 'distributor':
+                return <DistributorDashboard onNavigate={navigateTo} />;
+              case 'admin':
+              case 'super_admin':
+                return <AdminDashboard onNavigate={navigateTo} />;
+              case 'customer':
+              default:
+                return <CustomerDashboard onNavigate={navigateTo} />;
+            }
+          })()
+        )
+      )}
 
-  return <LandingPage onNavigate={navigateTo} />;
+      {currentPage !== 'register' && currentPage !== 'upload' && currentPage !== 'dashboard' && (
+        <LandingPage onNavigate={navigateTo} />
+      )}
+    </Suspense>
+  );
 }
-
-import { LanguageProvider } from './context/LanguageContext';
-import { PwaProvider } from './context/PwaContext';
 
 export default function App() {
   return (

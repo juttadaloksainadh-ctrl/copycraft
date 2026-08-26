@@ -22,8 +22,8 @@ if (!JWT_SECRET) {
 
 const SECRET = JWT_SECRET || 'dev-only-insecure-secret-do-not-use-in-production';
 
-export const generateToken = (payload) => {
-  return jwt.sign(payload, SECRET, { expiresIn: JWT_EXPIRES_IN });
+export const generateToken = (payload, expiresIn) => {
+  return jwt.sign(payload, SECRET, { expiresIn: expiresIn || JWT_EXPIRES_IN });
 };
 
 export const verifyToken = (token) => {

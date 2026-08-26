@@ -12,4 +12,16 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom'],
+          'vendor-icons': ['lucide-react'],
+          'vendor-html2canvas': ['html2canvas'],
+          'vendor-dompurify': ['dompurify'],
+        },
+      },
+    },
+  },
 });

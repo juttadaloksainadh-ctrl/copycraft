@@ -5,7 +5,7 @@ import { useToast } from '../../context/ToastContext';
 import { apiFetch } from '../../utils/api';
 import {
   User, Phone, Mail, MapPin, Building2,
-  Edit3, CheckCircle, X, ShieldCheck, Calendar, Key
+  Edit3, CheckCircle, X, ShieldCheck, Calendar, Key, Lock, Eye, EyeOff, ChevronDown, ChevronUp
 } from 'lucide-react';
 
 const ROLE_COLOR = {
@@ -35,6 +35,14 @@ export default function ProfilePage() {
     phone: '',
     roomDetails: ''
   });
+
+  // Change password state
+  const [showChangePwd, setShowChangePwd] = useState(false);
+  const [pwdForm, setPwdForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  const [pwdSaving, setPwdSaving] = useState(false);
+  const [showCurrentPwd, setShowCurrentPwd] = useState(false);
+  const [showNewPwd, setShowNewPwd] = useState(false);
+  const [showConfirmPwd, setShowConfirmPwd] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -71,9 +79,48 @@ export default function ProfilePage() {
     }
   };
 
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    if (pwdForm.newPassword !== pwdForm.confirmPassword) {
+      addToast('New passwords do not match.', 'error');
+      return;
+    }
+    if (pwdForm.newPassword.length < 6) {
+      addToast('New password must be at least 6 characters.', 'error');
+      return;
+    }
+    setPwdSaving(true);
+    try {
+      const res = await apiFetch('/auth/change-password', {
+        method: 'PUT',
+        body: JSON.stringify({
+          currentPassword: pwdForm.currentPassword,
+          newPassword: pwdForm.newPassword
+        })
+      });
+      if (res.success) {
+        addToast('Password changed successfully! 🔐', 'success');
+        setPwdForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+        setShowChangePwd(false);
+      } else {
+        addToast(res.message || 'Password change failed.', 'error');
+      }
+    } catch (err) {
+      addToast('Failed to change password.', 'error');
+    } finally {
+      setPwdSaving(false);
+    }
+  };
+
   const roleColor = ROLE_COLOR[user?.role] || '#8B5CF6';
   const initials = (user?.name || 'U').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
   const joinDate = user?.createdAt ? new Date(user.createdAt).toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' }) : 'N/A';
+
+  const pwdInputStyle = (show, setter) => ({
+    position: 'relative',
+    display: 'flex',
+    alignItems: 'center'
+  });
 
   return (
     <div style={{ maxWidth: '720px' }}>
@@ -256,6 +303,154 @@ export default function ProfilePage() {
           )}
 
         </div>
+
+        {/* ── Change Password Section (customers only) ── */}
+        {user?.role === 'customer' && (
+          <div style={{ margin: '0 1.75rem 1.75rem' }}>
+            {/* Toggle Header */}
+            <button
+              onClick={() => setShowChangePwd(v => !v)}
+              style={{
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '1rem 1.25rem',
+                background: showChangePwd ? 'var(--primary-light)' : 'var(--bg-app)',
+                border: `1.5px solid ${showChangePwd ? 'var(--primary)' : 'var(--border-color)'}`,
+                borderRadius: 'var(--radius-md)',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                color: showChangePwd ? 'var(--primary)' : 'var(--text-main)'
+              }}
+            >
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontWeight: 700, fontSize: '0.95rem' }}>
+                <Lock size={16} />
+                Change Password
+              </span>
+              {showChangePwd ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+            </button>
+
+            {/* Password Form */}
+            {showChangePwd && (
+              <form
+                onSubmit={handleChangePassword}
+                style={{
+                  marginTop: '0.75rem',
+                  padding: '1.5rem',
+                  background: 'var(--bg-app)',
+                  border: '1.5px solid var(--primary)',
+                  borderRadius: 'var(--radius-md)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '1.1rem',
+                  animation: 'fadeIn 0.2s ease'
+                }}
+              >
+                {/* Current Password */}
+                <div className="input-group">
+                  <label className="input-label" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <Lock size={13} /> Current Password
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type={showCurrentPwd ? 'text' : 'password'}
+                      required
+                      className="input-field"
+                      style={{ paddingRight: '42px' }}
+                      value={pwdForm.currentPassword}
+                      placeholder="Enter your current password"
+                      onChange={e => setPwdForm(f => ({ ...f, currentPassword: e.target.value }))}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowCurrentPwd(v => !v)}
+                      style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 0 }}
+                    >
+                      {showCurrentPwd ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* New Password */}
+                <div className="input-group">
+                  <label className="input-label" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <Lock size={13} /> New Password
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type={showNewPwd ? 'text' : 'password'}
+                      required
+                      className="input-field"
+                      style={{ paddingRight: '42px' }}
+                      value={pwdForm.newPassword}
+                      placeholder="At least 6 characters"
+                      onChange={e => setPwdForm(f => ({ ...f, newPassword: e.target.value }))}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPwd(v => !v)}
+                      style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 0 }}
+                    >
+                      {showNewPwd ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Confirm New Password */}
+                <div className="input-group">
+                  <label className="input-label" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <Lock size={13} /> Confirm New Password
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type={showConfirmPwd ? 'text' : 'password'}
+                      required
+                      className="input-field"
+                      style={{
+                        paddingRight: '42px',
+                        borderColor: pwdForm.confirmPassword && pwdForm.confirmPassword !== pwdForm.newPassword ? '#EF4444' : undefined
+                      }}
+                      value={pwdForm.confirmPassword}
+                      placeholder="Re-enter new password"
+                      onChange={e => setPwdForm(f => ({ ...f, confirmPassword: e.target.value }))}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPwd(v => !v)}
+                      style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 0 }}
+                    >
+                      {showConfirmPwd ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                  {pwdForm.confirmPassword && pwdForm.confirmPassword !== pwdForm.newPassword && (
+                    <p style={{ color: '#EF4444', fontSize: '0.78rem', marginTop: '0.3rem' }}>Passwords do not match</p>
+                  )}
+                </div>
+
+                {/* Submit */}
+                <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => { setShowChangePwd(false); setPwdForm({ currentPassword: '', newPassword: '', confirmPassword: '' }); }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    disabled={pwdSaving}
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', minWidth: '160px', justifyContent: 'center' }}
+                  >
+                    <ShieldCheck size={16} />
+                    {pwdSaving ? 'Updating...' : 'Update Password'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        )}
 
         {/* Security info footer */}
         <div style={{
