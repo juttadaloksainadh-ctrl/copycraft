@@ -187,7 +187,7 @@ export default function Navbar({ onMobileMenuToggle }) {
 
             <a href="#" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', textDecoration: 'none' }}>
               <img
-                src="/logo.png"
+                src="/logo.png?v=2"
                 alt="CopyCraft Logo"
                 style={{ width: '34px', height: '34px', objectFit: 'contain', borderRadius: '8px' }}
               />

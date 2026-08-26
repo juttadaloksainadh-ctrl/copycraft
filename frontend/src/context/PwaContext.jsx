@@ -95,7 +95,7 @@ export function PwaProvider({ children }) {
             margin: '0 auto',
             boxShadow: '0 8px 20px rgba(79, 70, 229, 0.3)'
           }}>
-            <img src="/logo.png" alt="CopyCraft Logo" style={{ width: '44px', height: '44px', objectFit: 'contain', borderRadius: '10px' }} />
+            <img src="/logo.png?v=2" alt="CopyCraft Logo" style={{ width: '44px', height: '44px', objectFit: 'contain', borderRadius: '10px' }} />
           </div>
 
           <div>

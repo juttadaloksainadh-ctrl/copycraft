@@ -129,7 +129,7 @@ export default function RegisterPage({ onNavigate }) {
       <div className="card animate-fade-in" style={{ maxWidth: '480px', width: '100%', padding: '2.5rem' }}>
         <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
           <img
-            src="/logo.png"
+            src="/logo.png?v=2"
             alt="CopyCraft Logo"
             style={{ width: '70px', height: '70px', objectFit: 'contain', borderRadius: '12px', marginBottom: '0.75rem' }}
           />

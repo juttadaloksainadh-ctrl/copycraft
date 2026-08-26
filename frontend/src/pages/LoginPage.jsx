@@ -62,7 +62,7 @@ export default function LoginPage({ onNavigate, selectedPortal = 'customer' }) {
       <div className="card animate-fade-in" style={{ maxWidth: '440px', width: '100%', padding: '2.5rem' }}>
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
           <img
-            src="/logo.png"
+            src="/logo.png?v=2"
             alt="CopyCraft Logo"
             style={{ width: '70px', height: '70px', objectFit: 'contain', borderRadius: '12px', marginBottom: '0.75rem' }}
           />

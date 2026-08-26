@@ -34,7 +34,7 @@ export default function PortalSelectionPage({ onSelectPortal }) {
           animation: 'fadeIn 0.8s ease-out'
         }}>
           <img
-            src="/logo.png"
+            src="/logo.png?v=2"
             alt="CopyCraft Logo"
             style={{
               width: '100px',
@@ -128,7 +128,7 @@ export default function PortalSelectionPage({ onSelectPortal }) {
 
       <div style={{ maxWidth: '1020px', width: '100%', textAlign: 'center', marginBottom: '3rem' }}>
         <img
-          src="/logo.png"
+          src="/logo.png?v=2"
           alt="CopyCraft Logo"
           style={{
             width: '80px',
