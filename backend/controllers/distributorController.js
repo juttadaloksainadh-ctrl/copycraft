@@ -1,9 +1,36 @@
 import { db } from '../models/dbStore.js';
 
 export const getDistributorDashboard = (req, res) => {
-  const colleges = db.colleges;
-  const dealers = db.users.filter(u => u.role === 'dealer');
-  const orders = db.orders;
+  const user = req.user;
+
+  // Determine college IDs assigned to this distributor
+  const userCollegeIds = Array.isArray(user?.collegeIds) && user.collegeIds.length > 0
+    ? user.collegeIds
+    : (user?.collegeId ? [user.collegeId] : []);
+
+  const isSuperUser = ['admin', 'super_admin'].includes(user?.role);
+  const isGlobalView = isSuperUser && userCollegeIds.length === 0;
+
+  // Filter colleges assigned to distributor
+  const colleges = isGlobalView
+    ? db.colleges
+    : db.colleges.filter(c => userCollegeIds.includes(c.id));
+
+  const collegeIdSet = new Set(colleges.map(c => c.id));
+
+  // Filter dealers belonging to distributor's assigned colleges
+  const dealers = db.users.filter(u => {
+    if (u.role !== 'dealer') return false;
+    if (isGlobalView) return true;
+    if (u.collegeId && collegeIdSet.has(u.collegeId)) return true;
+    if (Array.isArray(u.collegeIds) && u.collegeIds.some(cid => collegeIdSet.has(cid))) return true;
+    return false;
+  });
+
+  // Filter orders: ONLY orders for the colleges assigned to this distributor
+  const orders = isGlobalView
+    ? db.orders
+    : db.orders.filter(o => o.collegeId && collegeIdSet.has(o.collegeId));
 
   const totalRevenue = orders.reduce((sum, o) => sum + (o.pricing?.finalPrice || 0), 0);
 
@@ -27,12 +54,13 @@ export const getDistributorDashboard = (req, res) => {
     },
     collegeStats,
     dealers: dealers.map(({ passwordHash, ...d }) => d),
-    recentOrders: orders.slice(0, 10)
+    recentOrders: orders
   });
 };
 
 export const assignDealerToOrder = (req, res) => {
   const { orderId, dealerId } = req.body;
+  const user = req.user;
 
   const order = db.orders.find(o => o.id === orderId);
   const dealer = db.users.find(u => u.id === dealerId && u.role === 'dealer');
@@ -40,13 +68,23 @@ export const assignDealerToOrder = (req, res) => {
   if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
   if (!dealer) return res.status(404).json({ success: false, message: 'Dealer not found' });
 
+  // Security Check: ensure order belongs to distributor's assigned colleges
+  const userCollegeIds = Array.isArray(user?.collegeIds) && user.collegeIds.length > 0
+    ? user.collegeIds
+    : (user?.collegeId ? [user.collegeId] : []);
+  const isSuperUser = ['admin', 'super_admin'].includes(user?.role);
+
+  if (!isSuperUser && userCollegeIds.length > 0 && !userCollegeIds.includes(order.collegeId)) {
+    return res.status(403).json({ success: false, message: 'You are not authorized to manage orders for this college' });
+  }
+
   order.dealerId = dealer.id;
   order.dealerName = dealer.name;
   order.orderStatus = 'ASSIGNED';
   order.timeline.push({
     status: 'ASSIGNED',
     time: new Date().toISOString(),
-    note: `Assigned to dealer ${dealer.name} by Distributor`
+    note: `Assigned to dealer ${dealer.name} by Distributor ${user.name}`
   });
 
   return res.json({ success: true, message: `Order assigned to ${dealer.name}`, order });
@@ -69,6 +107,16 @@ export const verifyDeliveryPin = (req, res) => {
 
   const order = db.orders.find(o => o.id === id);
   if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
+
+  // Security Check: ensure order belongs to distributor's assigned colleges
+  const userCollegeIds = Array.isArray(req.user?.collegeIds) && req.user.collegeIds.length > 0
+    ? req.user.collegeIds
+    : (req.user?.collegeId ? [req.user.collegeId] : []);
+  const isSuperUser = ['admin', 'super_admin'].includes(req.user?.role);
+
+  if (!isSuperUser && userCollegeIds.length > 0 && !userCollegeIds.includes(order.collegeId)) {
+    return res.status(403).json({ success: false, message: 'You are not authorized to deliver orders for this college' });
+  }
 
   if (order.orderStatus === 'DELIVERED') {
     return res.status(400).json({ success: false, message: 'Order has already been delivered.' });
