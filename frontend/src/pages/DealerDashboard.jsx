@@ -94,6 +94,8 @@ export default function DealerDashboard() {
 
   const filteredOrders = orders.filter(o => {
     if (filterStatus === 'ALL') return true;
+    if (filterStatus === 'ASSIGNED') return o.orderStatus === 'ASSIGNED' || o.orderStatus === 'CREATED' || o.orderStatus === 'PRINTING';
+    if (filterStatus === 'PRINTED') return o.orderStatus === 'PRINTED' || o.orderStatus === 'PACKAGING';
     return o.orderStatus === filterStatus;
   });
 
@@ -124,6 +126,11 @@ export default function DealerDashboard() {
       )
     }
   ];
+
+  const pendingCount = orders.filter(o => o.orderStatus === 'ASSIGNED' || o.orderStatus === 'CREATED' || o.orderStatus === 'PRINTING').length;
+  const printedCount = orders.filter(o => o.orderStatus === 'PRINTED' || o.orderStatus === 'PACKAGING').length;
+  const outForDeliveryCount = orders.filter(o => o.orderStatus === 'OUT_FOR_DELIVERY').length;
+  const deliveredCount = orders.filter(o => o.orderStatus === 'DELIVERED').length;
 
   return (
     <div className="dashboard-layout" style={{ minHeight: '100vh', background: 'var(--bg-app)' }}>
@@ -170,10 +177,10 @@ export default function DealerDashboard() {
               <div style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto', paddingBottom: '0.25rem' }}>
                 {[
                   { id: 'ALL', label: `All Orders (${orders.length})` },
-                  { id: 'ASSIGNED', label: 'Pending Print' },
-                  { id: 'PRINTING', label: 'Printing In Progress' },
-                  { id: 'OUT_FOR_DELIVERY', label: 'Out For Delivery' },
-                  { id: 'DELIVERED', label: 'Completed' }
+                  { id: 'ASSIGNED', label: `Pending Print (${pendingCount})` },
+                  { id: 'PRINTED', label: `Printed Orders (${printedCount})` },
+                  { id: 'OUT_FOR_DELIVERY', label: `Out For Delivery (${outForDeliveryCount})` },
+                  { id: 'DELIVERED', label: `Completed (${deliveredCount})` }
                 ].map(tab => (
                   <button
                     key={tab.id}
@@ -184,6 +191,7 @@ export default function DealerDashboard() {
                   </button>
                 ))}
               </div>
+
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '1.25rem' }}>
                 {filteredOrders.length > 0 ? (
