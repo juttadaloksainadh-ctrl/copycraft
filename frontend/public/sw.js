@@ -1,10 +1,9 @@
-const CACHE_NAME = 'copycraft-v1';
+const CACHE_NAME = 'copycraft-v3';
 const ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/logo.png',
-  '/logo.svg'
+  '/logo.png'
 ];
 
 self.addEventListener('install', (event) => {
@@ -29,18 +28,25 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
-  
+
   // Skip API requests and external URLs from cache
   if (event.request.url.includes('/api/') || !event.request.url.startsWith(self.location.origin)) {
     return;
   }
 
+  // Network-first strategy: always try network first, fall back to cache
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) return cachedResponse;
-      return fetch(event.request).then((networkResponse) => {
-        return networkResponse;
-      }).catch(() => {
+    fetch(event.request).then((networkResponse) => {
+      // Cache the fresh response
+      const responseClone = networkResponse.clone();
+      caches.open(CACHE_NAME).then((cache) => {
+        cache.put(event.request, responseClone);
+      });
+      return networkResponse;
+    }).catch(() => {
+      // Network failed, serve from cache
+      return caches.match(event.request).then((cachedResponse) => {
+        if (cachedResponse) return cachedResponse;
         if (event.request.headers.get('accept')?.includes('text/html')) {
           return caches.match('/index.html');
         }
