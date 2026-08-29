@@ -11,6 +11,7 @@ import distributorRoutes from './routes/distributorRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import aiRoutes from './routes/aiRoutes.js';
 import fileRoutes from './routes/fileRoutes.js';
+import paymentRoutes from './routes/paymentRoutes.js';
 import stationeryRoutes from './routes/stationeryRoutes.js';
 
 const app = express();
