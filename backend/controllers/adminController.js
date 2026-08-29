@@ -179,7 +179,7 @@ export const getAuditLogs = (req, res) => {
 };
 
 export const createStaffAccount = async (req, res) => {
-  const { name, email, password, phone, role, collegeId, collegeIds } = req.body;
+  const { name, email, password, phone, role, dealerType, collegeId, collegeIds } = req.body;
   if (!name || !email || !password || !role) {
     return res.status(400).json({ success: false, message: 'Staff name, email, password, and role are required' });
   }
@@ -201,7 +201,8 @@ export const createStaffAccount = async (req, res) => {
     passwordHash,
     name,
     phone: phone || '+91 98000 00000',
-    role, // 'dealer' | 'distributor'
+    role, // 'dealer' | 'distributor' | 'stationery_dealer'
+    dealerType: dealerType || (role === 'stationery_dealer' ? 'stationery' : 'print'),
     collegeIds: assignedColleges,
     collegeId: assignedColleges[0] || '',
     createdAt: new Date().toISOString()

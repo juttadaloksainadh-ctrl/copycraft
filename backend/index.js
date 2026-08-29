@@ -11,9 +11,10 @@ import distributorRoutes from './routes/distributorRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import aiRoutes from './routes/aiRoutes.js';
 import fileRoutes from './routes/fileRoutes.js';
-import paymentRoutes from './routes/paymentRoutes.js';
+import stationeryRoutes from './routes/stationeryRoutes.js';
 
 const app = express();
+
 const PORT = process.env.PORT || 5000;
 
 // ---- CORS ----
@@ -68,6 +69,8 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/files', fileRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/stationery', stationeryRoutes);
+
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

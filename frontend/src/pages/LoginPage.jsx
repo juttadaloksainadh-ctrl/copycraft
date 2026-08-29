@@ -292,7 +292,8 @@ export default function LoginPage({ onNavigate, selectedPortal = 'customer' }) {
 
   const portalNames = {
     customer: 'Customer Portal',
-    dealer: 'Dealer Hub',
+    dealer: 'Dealer Hub — Printing Station',
+    stationery_dealer: 'Dealer Hub — Stationery Store',
     distributor: 'Distributor Portal',
     admin: 'Executive Admin'
   };

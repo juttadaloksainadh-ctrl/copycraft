@@ -913,6 +913,7 @@ export default function AdminDashboard() {
                 onChange={e => setStaffForm({ ...staffForm, role: e.target.value })}
               >
                 <option value="dealer">Print Dealer (Hostel & Campus Station)</option>
+                <option value="stationery_dealer">Stationery Dealer (Campus Stationery Shop)</option>
                 <option value="distributor">Delivery Coordinator (Distributor)</option>
               </select>
             </div>

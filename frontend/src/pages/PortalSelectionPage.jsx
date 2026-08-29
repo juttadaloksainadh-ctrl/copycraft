@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Printer, FileText, Truck, ShieldCheck, Sparkles, Layers } from 'lucide-react';
+import { Printer, FileText, Truck, ShieldCheck, Sparkles, Layers, Sun, Moon } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
-import { Sun, Moon } from 'lucide-react';
+import StationeryHubChoiceModal from '../components/dealer/StationeryHubChoiceModal';
 
 export default function PortalSelectionPage({ onSelectPortal }) {
   const [showLogoSplash, setShowLogoSplash] = useState(true);
+  const [showDealerChoiceModal, setShowDealerChoiceModal] = useState(false);
   const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {
@@ -74,7 +75,7 @@ export default function PortalSelectionPage({ onSelectPortal }) {
     {
       id: 'customer',
       title: 'Customer Portal',
-      description: 'Upload files, customize your print preferences, make secure online payments, and get deliveries right to your classroom or hostel room.',
+      description: 'Upload print files or order campus stationery essentials (notebooks, pens, lab coats) delivered directly to your room.',
       icon: FileText,
       color: 'var(--primary)',
       badge: 'Students & Faculty'
@@ -82,10 +83,10 @@ export default function PortalSelectionPage({ onSelectPortal }) {
     {
       id: 'dealer',
       title: 'Dealer Hub',
-      description: 'Access assigned campus print jobs, download customer documents, update print statuses, and verify order handovers using delivery PINs.',
+      description: 'Select Printing Hub to process print queues or Stationery Hub to manage campus store items and orders.',
       icon: Printer,
       color: 'var(--success)',
-      badge: 'Local Print Stations'
+      badge: 'Print & Stationery Hubs'
     },
     {
       id: 'distributor',
@@ -98,12 +99,29 @@ export default function PortalSelectionPage({ onSelectPortal }) {
     {
       id: 'admin',
       title: 'Executive Admin',
-      description: 'Manage pricing rules, college configurations, dealer/distributor accounts, coupon codes, and monitor audit logs.',
+      description: 'Manage pricing rules, college configurations, dealer/distributor accounts, stationery stores, and audit logs.',
       icon: ShieldCheck,
       color: 'var(--warning)',
       badge: 'Platform Managers'
     }
   ];
+
+  const handlePortalClick = (portalId) => {
+    if (portalId === 'dealer') {
+      setShowDealerChoiceModal(true);
+    } else {
+      onSelectPortal(portalId);
+    }
+  };
+
+  const handleHubSelect = (hubType) => {
+    setShowDealerChoiceModal(false);
+    if (hubType === 'stationery') {
+      onSelectPortal('stationery_dealer');
+    } else {
+      onSelectPortal('dealer');
+    }
+  };
 
   return (
     <div style={{
@@ -142,7 +160,7 @@ export default function PortalSelectionPage({ onSelectPortal }) {
           Select Gateway Portal
         </h2>
         <p style={{ fontSize: '1.05rem', color: 'var(--text-muted)', maxWidth: '600px', margin: '0 auto' }}>
-          Choose your gateway portal to access the CopyCraft print networks and dashboard directories.
+          Choose your gateway portal to access the CopyCraft print networks, stationery store, and dashboard directories.
         </p>
       </div>
 
@@ -158,7 +176,7 @@ export default function PortalSelectionPage({ onSelectPortal }) {
           return (
             <div
               key={portal.id}
-              onClick={() => onSelectPortal(portal.id)}
+              onClick={() => handlePortalClick(portal.id)}
               className="card card-hover glass-panel animate-fade-in"
               style={{
                 cursor: 'pointer',
@@ -214,6 +232,13 @@ export default function PortalSelectionPage({ onSelectPortal }) {
           );
         })}
       </div>
+
+      {/* Sub-Hub Selector Modal for Dealer Portal */}
+      <StationeryHubChoiceModal
+        isOpen={showDealerChoiceModal}
+        onClose={() => setShowDealerChoiceModal(false)}
+        onSelectHub={handleHubSelect}
+      />
     </div>
   );
 }

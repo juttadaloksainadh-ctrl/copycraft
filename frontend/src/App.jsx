@@ -13,7 +13,9 @@ import LoginPage from './pages/LoginPage';
 const RegisterPage = lazy(() => import('./pages/RegisterPage'));
 const CustomerDashboard = lazy(() => import('./pages/CustomerDashboard'));
 const DealerDashboard = lazy(() => import('./pages/DealerDashboard'));
+const StationeryDealerDashboard = lazy(() => import('./pages/StationeryDealerDashboard'));
 const DistributorDashboard = lazy(() => import('./pages/DistributorDashboard'));
+
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 const UploadPage = lazy(() => import('./pages/UploadPage'));
 const LandingPage = lazy(() => import('./pages/LandingPage'));
@@ -110,8 +112,14 @@ function AppContent() {
           (() => {
             switch (user.role) {
               case 'dealer':
+                if (user.dealerType === 'stationery' || user.subRole === 'stationery' || user.role === 'stationery_dealer') {
+                  return <StationeryDealerDashboard onNavigate={navigateTo} />;
+                }
                 return <DealerDashboard onNavigate={navigateTo} />;
+              case 'stationery_dealer':
+                return <StationeryDealerDashboard onNavigate={navigateTo} />;
               case 'distributor':
+
                 return <DistributorDashboard onNavigate={navigateTo} />;
               case 'admin':
               case 'super_admin':

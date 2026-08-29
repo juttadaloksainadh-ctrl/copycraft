@@ -9,9 +9,9 @@ import Badge from '../components/common/Badge';
 import OrderTracker from '../components/customer/OrderTracker';
 import Modal from '../components/common/Modal';
 import DataTable from '../components/common/DataTable';
-import ProfilePage from '../components/common/ProfilePage';
-import { usePwa } from '../context/PwaContext';
+import StationeryStoreSection from '../components/customer/StationeryStoreSection';
 import { Printer, UploadCloud, Clock, Gift, Phone, HelpCircle, Eye, ShieldCheck, Plus, MessageSquare, RefreshCw, Truck, Download } from 'lucide-react';
+
 
 export default function CustomerDashboard({ onNavigate }) {
   const { user } = useAuth();
@@ -237,6 +237,9 @@ export default function CustomerDashboard({ onNavigate }) {
                   </div>
                 )}
               </div>
+
+              {/* Amazon-Style Stationery Store Section */}
+              <StationeryStoreSection />
 
               {/* Recent Orders */}
               <DataTable
