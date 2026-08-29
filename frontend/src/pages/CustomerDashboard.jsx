@@ -173,7 +173,7 @@ export default function CustomerDashboard({ onNavigate }) {
               </div>
 
               {/* Amazon-Style Stationery Store Section */}
-              <StationeryStoreSection />
+              <StationeryStoreSection onOrderPlaced={fetchOrders} />
 
               {/* Recent Orders */}
               <DataTable

@@ -66,7 +66,7 @@ export const getDistributorDashboard = async (req, res) => {
   if (isUsingMongo()) {
     try {
       const usersCol = getMongoCollection('users');
-      const mongoDealers = await usersCol.find({ role: 'dealer' }).toArray();
+      const mongoDealers = await usersCol.find({ role: { $in: ['dealer', 'stationery_dealer'] } }).toArray();
       dealers = mongoDealers.filter(u => {
         if (isGlobalView) return true;
         if (u.collegeId && collegeIdSet.has(u.collegeId)) return true;
@@ -77,7 +77,7 @@ export const getDistributorDashboard = async (req, res) => {
   }
   if (dealers.length === 0) {
     dealers = db.users.filter(u => {
-      if (u.role !== 'dealer') return false;
+      if (u.role !== 'dealer' && u.role !== 'stationery_dealer') return false;
       if (isGlobalView) return true;
       if (u.collegeId && collegeIdSet.has(u.collegeId)) return true;
       if (Array.isArray(u.collegeIds) && u.collegeIds.some(cid => collegeIdSet.has(cid))) return true;
@@ -133,14 +133,14 @@ export const assignDealerToOrder = async (req, res) => {
   const user = req.user;
 
   let order = db.orders.find(o => o.id === orderId);
-  let dealer = db.users.find(u => u.id === dealerId && u.role === 'dealer');
+  let dealer = db.users.find(u => u.id === dealerId && (u.role === 'dealer' || u.role === 'stationery_dealer'));
 
   if (isUsingMongo()) {
     try {
       const ordersCol = getMongoCollection('orders');
       const usersCol = getMongoCollection('users');
       if (!order) order = await ordersCol.findOne({ id: orderId });
-      if (!dealer) dealer = await usersCol.findOne({ id: dealerId, role: 'dealer' });
+      if (!dealer) dealer = await usersCol.findOne({ id: dealerId, role: { $in: ['dealer', 'stationery_dealer'] } });
     } catch (_) {}
   }
 

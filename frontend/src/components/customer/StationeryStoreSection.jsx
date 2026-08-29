@@ -17,7 +17,7 @@ const CATEGORIES = [
   'Tech Accessories'
 ];
 
-export default function StationeryStoreSection() {
+export default function StationeryStoreSection({ onOrderPlaced }) {
   const { addToast } = useToast();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -102,6 +102,7 @@ export default function StationeryStoreSection() {
         addToast(`Stationery order #${res.order?.id} placed successfully! 🛒`, 'success');
         setSelectedProduct(null);
         setDeliveryLocation('');
+        if (onOrderPlaced) onOrderPlaced();
       } else {
         addToast(res.message || 'Failed to place order', 'error');
       }

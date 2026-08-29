@@ -206,7 +206,8 @@ export const login = async (req, res) => {
 
   const portalRoles = {
     customer: ['customer'],
-    dealer: ['dealer'],
+    dealer: ['dealer', 'stationery_dealer'],
+    stationery_dealer: ['stationery_dealer', 'dealer'],
     distributor: ['distributor'],
     admin: ['admin', 'super_admin']
   };
@@ -217,6 +218,20 @@ export const login = async (req, res) => {
     return res.status(403).json({
       success: false,
       message: 'Security Alert: You do not have permissions to access this staff portal. Incident reported to administrator.'
+    });
+  }
+
+  // Check crossover permissions
+  if (portal === 'stationery_dealer' && user.role === 'dealer' && user.dealerType !== 'stationery') {
+    return res.status(403).json({
+      success: false,
+      message: 'Security Alert: You are registered as a Print Dealer. Please access the Printing Hub instead.'
+    });
+  }
+  if (portal === 'dealer' && (user.role === 'stationery_dealer' || user.dealerType === 'stationery')) {
+    return res.status(403).json({
+      success: false,
+      message: 'Security Alert: You are registered as a Stationery Dealer. Please access the Stationery Hub instead.'
     });
   }
 
