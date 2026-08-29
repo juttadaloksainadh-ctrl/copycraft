@@ -62,6 +62,12 @@ export default function Sidebar({ activeTab, setActiveTab, isOpen = false, onClo
       { id: 'support', label: 'Support', icon: HelpCircle },
       { id: 'profile', label: t('profile'), icon: User }
     ],
+    stationery_dealer: [
+      { id: 'stationery_orders', label: 'Received Orders', icon: Package },
+      { id: 'upload_new', label: 'Upload New Item', icon: UploadCloud },
+      { id: 'catalog', label: 'Catalog & Stock', icon: Tag },
+      { id: 'profile', label: t('profile'), icon: User }
+    ],
     distributor: [
       { id: 'distributor_dashboard', label: 'Campus Hub', icon: Truck },
       { id: 'dealers', label: 'Manage Dealers', icon: Users },
