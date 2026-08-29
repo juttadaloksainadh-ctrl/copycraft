@@ -214,6 +214,8 @@ export async function createOrderRecord({ user, orderData, paymentInfo = {} }) {
     customerId: user.id,
     customerName: user.name,
     customerPhone: user.phone,
+    customerEmail: user.email || '',
+    deliveryPin: user.deliveryPin || '',
     collegeId: finalCollegeId,
     collegeName: finalCollegeName,
     yearOfStudy: yearOfStudy || 'Student',

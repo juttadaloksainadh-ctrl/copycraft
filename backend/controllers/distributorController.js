@@ -1,6 +1,49 @@
 import { db } from '../models/dbStore.js';
+import { isUsingMongo, getMongoCollection } from '../config/db.js';
 
-export const getDistributorDashboard = (req, res) => {
+async function findCustomerForOrder(order) {
+  let customer = null;
+
+  // 1. Query MongoDB if active
+  if (isUsingMongo()) {
+    try {
+      const usersCol = getMongoCollection('users');
+      if (order.customerId) {
+        customer = await usersCol.findOne({ id: order.customerId });
+      }
+      if (!customer && order.customerPhone) {
+        customer = await usersCol.findOne({ phone: order.customerPhone });
+      }
+      if (!customer && order.customerEmail) {
+        customer = await usersCol.findOne({ email: { $regex: new RegExp(`^${order.customerEmail}$`, 'i') } });
+      }
+    } catch (err) {
+      console.error('Mongo customer lookup error in distributorController:', err.message);
+    }
+  }
+
+  // 2. Query in-memory db.users
+  if (!customer) {
+    customer = db.users.find(u => u.id === order.customerId) ||
+               db.users.find(u => u.phone && u.phone === order.customerPhone) ||
+               db.users.find(u => u.email && u.email.toLowerCase() === order.customerEmail?.toLowerCase());
+  }
+
+  // 3. Fallback: Construct customer profile from order metadata & PIN
+  if (!customer && (order.customerId || order.customerPhone || order.customerEmail || order.deliveryPin)) {
+    customer = {
+      id: order.customerId || 'usr_guest',
+      name: order.customerName || 'Customer',
+      phone: order.customerPhone || '',
+      email: order.customerEmail || '',
+      deliveryPin: order.deliveryPin || ''
+    };
+  }
+
+  return customer;
+}
+
+export const getDistributorDashboard = async (req, res) => {
   const user = req.user;
 
   // Determine college IDs assigned to this distributor
@@ -18,19 +61,46 @@ export const getDistributorDashboard = (req, res) => {
 
   const collegeIdSet = new Set(colleges.map(c => c.id));
 
-  // Filter dealers belonging to distributor's assigned colleges
-  const dealers = db.users.filter(u => {
-    if (u.role !== 'dealer') return false;
-    if (isGlobalView) return true;
-    if (u.collegeId && collegeIdSet.has(u.collegeId)) return true;
-    if (Array.isArray(u.collegeIds) && u.collegeIds.some(cid => collegeIdSet.has(cid))) return true;
-    return false;
-  });
+  // Fetch dealers (from MongoDB or db.users)
+  let dealers = [];
+  if (isUsingMongo()) {
+    try {
+      const usersCol = getMongoCollection('users');
+      const mongoDealers = await usersCol.find({ role: 'dealer' }).toArray();
+      dealers = mongoDealers.filter(u => {
+        if (isGlobalView) return true;
+        if (u.collegeId && collegeIdSet.has(u.collegeId)) return true;
+        if (Array.isArray(u.collegeIds) && u.collegeIds.some(cid => collegeIdSet.has(cid))) return true;
+        return false;
+      });
+    } catch (_) {}
+  }
+  if (dealers.length === 0) {
+    dealers = db.users.filter(u => {
+      if (u.role !== 'dealer') return false;
+      if (isGlobalView) return true;
+      if (u.collegeId && collegeIdSet.has(u.collegeId)) return true;
+      if (Array.isArray(u.collegeIds) && u.collegeIds.some(cid => collegeIdSet.has(cid))) return true;
+      return false;
+    });
+  }
 
-  // Filter orders: ONLY orders for the colleges assigned to this distributor
-  const orders = isGlobalView
-    ? db.orders
-    : db.orders.filter(o => o.collegeId && collegeIdSet.has(o.collegeId));
+  // Fetch orders (from MongoDB or db.orders)
+  let orders = [];
+  if (isUsingMongo()) {
+    try {
+      const ordersCol = getMongoCollection('orders');
+      const mongoOrders = await ordersCol.find({}).sort({ createdAt: -1 }).toArray();
+      orders = isGlobalView
+        ? mongoOrders
+        : mongoOrders.filter(o => o.collegeId && collegeIdSet.has(o.collegeId));
+    } catch (_) {}
+  }
+  if (orders.length === 0) {
+    orders = isGlobalView
+      ? db.orders
+      : db.orders.filter(o => o.collegeId && collegeIdSet.has(o.collegeId));
+  }
 
   const totalRevenue = orders.reduce((sum, o) => sum + (o.pricing?.finalPrice || 0), 0);
 
@@ -58,12 +128,21 @@ export const getDistributorDashboard = (req, res) => {
   });
 };
 
-export const assignDealerToOrder = (req, res) => {
+export const assignDealerToOrder = async (req, res) => {
   const { orderId, dealerId } = req.body;
   const user = req.user;
 
-  const order = db.orders.find(o => o.id === orderId);
-  const dealer = db.users.find(u => u.id === dealerId && u.role === 'dealer');
+  let order = db.orders.find(o => o.id === orderId);
+  let dealer = db.users.find(u => u.id === dealerId && u.role === 'dealer');
+
+  if (isUsingMongo()) {
+    try {
+      const ordersCol = getMongoCollection('orders');
+      const usersCol = getMongoCollection('users');
+      if (!order) order = await ordersCol.findOne({ id: orderId });
+      if (!dealer) dealer = await usersCol.findOne({ id: dealerId, role: 'dealer' });
+    } catch (_) {}
+  }
 
   if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
   if (!dealer) return res.status(404).json({ success: false, message: 'Dealer not found' });
@@ -81,11 +160,29 @@ export const assignDealerToOrder = (req, res) => {
   order.dealerId = dealer.id;
   order.dealerName = dealer.name;
   order.orderStatus = 'ASSIGNED';
+  order.timeline = order.timeline || [];
   order.timeline.push({
     status: 'ASSIGNED',
     time: new Date().toISOString(),
     note: `Assigned to dealer ${dealer.name} by Distributor ${user.name}`
   });
+
+  if (isUsingMongo()) {
+    try {
+      const ordersCol = getMongoCollection('orders');
+      await ordersCol.updateOne(
+        { id: order.id },
+        {
+          $set: {
+            dealerId: dealer.id,
+            dealerName: dealer.name,
+            orderStatus: 'ASSIGNED',
+            timeline: order.timeline
+          }
+        }
+      );
+    } catch (_) {}
+  }
 
   return res.json({ success: true, message: `Order assigned to ${dealer.name}`, order });
 };
@@ -93,11 +190,8 @@ export const assignDealerToOrder = (req, res) => {
 /**
  * POST /api/distributor/orders/:id/verify-delivery-pin
  * The distributor verifies the customer's 6-digit delivery PIN on handoff.
- * On success:
- *   - Order is marked DELIVERED with a precise deliveredAt timestamp.
- *   - The 48h R2 file cleanup scheduler uses this timestamp to schedule deletion.
  */
-export const verifyDeliveryPin = (req, res) => {
+export const verifyDeliveryPin = async (req, res) => {
   const { id } = req.params;
   const { pin } = req.body;
 
@@ -105,7 +199,15 @@ export const verifyDeliveryPin = (req, res) => {
     return res.status(400).json({ success: false, message: 'Please enter the 6-digit delivery PIN' });
   }
 
-  const order = db.orders.find(o => o.id === id);
+  let order = db.orders.find(o => o.id === id);
+
+  if (!order && isUsingMongo()) {
+    try {
+      const ordersCol = getMongoCollection('orders');
+      order = await ordersCol.findOne({ id });
+    } catch (_) {}
+  }
+
   if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
 
   // Security Check: ensure order belongs to distributor's assigned colleges
@@ -122,14 +224,8 @@ export const verifyDeliveryPin = (req, res) => {
     return res.status(400).json({ success: false, message: 'Order has already been delivered.' });
   }
 
-  // Look up the customer's permanent 6-digit delivery PIN
-  let customer = db.users.find(u => u.id === order.customerId);
-  if (!customer && order.customerPhone) {
-    customer = db.users.find(u => u.phone === order.customerPhone);
-  }
-  if (!customer && order.customerEmail) {
-    customer = db.users.find(u => u.email === order.customerEmail);
-  }
+  // Look up customer (handles MongoDB & in-memory & fallback)
+  const customer = await findCustomerForOrder(order);
 
   if (!customer) {
     return res.status(404).json({ success: false, message: 'Customer record not found for this order' });
@@ -150,13 +246,34 @@ export const verifyDeliveryPin = (req, res) => {
   const isCOD = order.paymentMethod === 'COD' || !order.paymentMethod;
 
   order.orderStatus = 'DELIVERED';
-  order.paymentStatus = 'PAID'; // COD: cash collected on delivery; Online: already paid
-  order.deliveredAt = deliveredAt; // ← 48h file cleanup timer starts from this moment
+  order.paymentStatus = 'PAID'; // COD: cash collected on delivery; Online: pre-paid
+  order.deliveredAt = deliveredAt;
+  order.timeline = order.timeline || [];
   order.timeline.push({
     status: 'DELIVERED',
     time: deliveredAt,
     note: `Delivered and PIN verified by delivery coordinator ${req.user.name}. Payment: ${isCOD ? 'Cash collected on delivery (COD)' : `Online (${order.paymentMethod}) — pre-paid`}.`
   });
+
+  // Update in MongoDB if active
+  if (isUsingMongo()) {
+    try {
+      const ordersCol = getMongoCollection('orders');
+      await ordersCol.updateOne(
+        { id: order.id },
+        {
+          $set: {
+            orderStatus: 'DELIVERED',
+            paymentStatus: 'PAID',
+            deliveredAt,
+            timeline: order.timeline
+          }
+        }
+      );
+    } catch (e) {
+      console.error('Mongo order update error:', e.message);
+    }
+  }
 
   db.auditLogs.unshift({
     id: `log_${Date.now()}`,
@@ -180,11 +297,19 @@ export const verifyDeliveryPin = (req, res) => {
  * POST /api/distributor/orders/:id/mark-printed
  * The distributor marks an order as PRINTED.
  */
-export const markOrderPrinted = (req, res) => {
+export const markOrderPrinted = async (req, res) => {
   const { id } = req.params;
   const user = req.user;
 
-  const order = db.orders.find(o => o.id === id);
+  let order = db.orders.find(o => o.id === id);
+
+  if (!order && isUsingMongo()) {
+    try {
+      const ordersCol = getMongoCollection('orders');
+      order = await ordersCol.findOne({ id });
+    } catch (_) {}
+  }
+
   if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
 
   // Security Check: ensure order belongs to distributor's assigned colleges
@@ -198,11 +323,27 @@ export const markOrderPrinted = (req, res) => {
   }
 
   order.orderStatus = 'PRINTED';
+  order.timeline = order.timeline || [];
   order.timeline.push({
     status: 'PRINTED',
     time: new Date().toISOString(),
     note: `Order marked as PRINTED by Distributor ${user.name}`
   });
+
+  if (isUsingMongo()) {
+    try {
+      const ordersCol = getMongoCollection('orders');
+      await ordersCol.updateOne(
+        { id: order.id },
+        {
+          $set: {
+            orderStatus: 'PRINTED',
+            timeline: order.timeline
+          }
+        }
+      );
+    } catch (_) {}
+  }
 
   db.auditLogs.unshift({
     id: `log_${Date.now()}`,
@@ -219,4 +360,3 @@ export const markOrderPrinted = (req, res) => {
     order
   });
 };
-
