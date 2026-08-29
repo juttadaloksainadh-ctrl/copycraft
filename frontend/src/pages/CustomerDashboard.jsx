@@ -172,16 +172,28 @@ export default function CustomerDashboard({ onNavigate }) {
                 </div>
               </div>
 
-              {/* Assigned Campus Delivery Coordinator (Distributor) */}
-              <div className="card glass-panel" style={{ padding: '1.5rem', border: '1px solid var(--border-color)' }}>
+              {/* Amazon-Style Stationery Store Section */}
+              <StationeryStoreSection />
+
+              {/* Recent Orders */}
+              <DataTable
+                columns={columns}
+                data={orders.slice(0, 5)}
+                title="Recent Print Orders"
+                searchPlaceholder="Search order ID or status..."
+                exportFileName="my-copycraft-orders"
+              />
+
+              {/* Campus Delivery Coordinator (Distributor) Details at the Bottom */}
+              <div className="card glass-panel" style={{ padding: '1.5rem', border: '1px solid var(--border-color)', marginTop: '1.5rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem' }}>
                   <div>
                     <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                      Campus Delivery Coordinator
+                      Campus Delivery Coordinator (Distributor)
                     </div>
                     <h3 style={{ fontSize: '1.2rem', fontWeight: 800, margin: '0.25rem 0 0 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                       <Truck size={20} color="var(--primary)" />
-                      {assignedDistributor ? assignedDistributor.collegeName : 'Campus Delivery Dispatch'}
+                      {assignedDistributor ? assignedDistributor.collegeName : (user?.collegeName || 'Campus Delivery Dispatch')}
                     </h3>
                   </div>
                   {assignedDistributor ? (
@@ -240,18 +252,6 @@ export default function CustomerDashboard({ onNavigate }) {
                   </div>
                 )}
               </div>
-
-              {/* Amazon-Style Stationery Store Section */}
-              <StationeryStoreSection />
-
-              {/* Recent Orders */}
-              <DataTable
-                columns={columns}
-                data={orders.slice(0, 5)}
-                title="Recent Print Orders"
-                searchPlaceholder="Search order ID or status..."
-                exportFileName="my-copycraft-orders"
-              />
             </>
           )}
 
