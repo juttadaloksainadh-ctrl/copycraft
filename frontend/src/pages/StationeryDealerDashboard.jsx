@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { apiFetch } from '../utils/api';
@@ -9,12 +9,16 @@ import Badge from '../components/common/Badge';
 import ProfilePage from '../components/common/ProfilePage';
 import {
   ShoppingBag, PlusCircle, Package, RefreshCw, Phone, MapPin,
-  CheckCircle, Truck, Camera, Upload, Trash2, Edit2, DollarSign, ToggleLeft, ToggleRight
+  CheckCircle, Truck, Camera, Upload, Trash2, Edit2, DollarSign, ToggleLeft, ToggleRight,
+  Image as ImageIcon, FolderOpen
 } from 'lucide-react';
 
 export default function StationeryDealerDashboard({ onNavigate }) {
   const { user } = useAuth();
   const { addToast } = useToast();
+
+  const galleryInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
 
   const [activeTab, setActiveTab] = useState('stationery_orders');
   const [orders, setOrders] = useState([]);
@@ -306,46 +310,126 @@ export default function StationeryDealerDashboard({ onNavigate }) {
               </div>
 
               <form onSubmit={handleUploadProduct} style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
-                {/* Photo Upload Box (Camera or File Picker) */}
+                {/* Photo Upload Box (Gallery, Browser, or Camera) */}
                 <div className="input-group">
                   <label className="input-label">Product Image Photo</label>
-                  <div style={{
-                    border: '2px dashed var(--border-color)',
-                    borderRadius: '16px',
-                    padding: '1.5rem',
-                    textAlign: 'center',
-                    background: 'var(--bg-app)',
-                    position: 'relative',
-                    cursor: 'pointer'
-                  }}>
+                  
+                  {/* Hidden inputs for Gallery and Camera */}
+                  <input
+                    ref={galleryInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageFileChange}
+                    style={{ display: 'none' }}
+                  />
+                  <input
+                    ref={cameraInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={handleImageFileChange}
+                    style={{ display: 'none' }}
+                  />
+
+                  <div
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                        const file = e.dataTransfer.files[0];
+                        if (file.type.startsWith('image/')) {
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            setImagePreview(reader.result);
+                            setUploadForm(f => ({ ...f, imageUrl: reader.result }));
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }
+                    }}
+                    style={{
+                      border: '2px dashed var(--border-color)',
+                      borderRadius: '16px',
+                      padding: '1.5rem',
+                      textAlign: 'center',
+                      background: 'var(--bg-app)',
+                      position: 'relative'
+                    }}
+                  >
                     {imagePreview ? (
-                      <div style={{ position: 'relative', display: 'inline-block' }}>
-                        <img src={imagePreview} alt="Preview" style={{ height: '140px', objectFit: 'contain', borderRadius: '12px' }} />
-                        <button
-                          type="button"
-                          onClick={() => { setImagePreview(null); setUploadForm(f => ({ ...f, imageUrl: '' })); }}
-                          style={{ position: 'absolute', top: '-10px', right: '-10px', background: 'var(--danger)', color: '#fff', borderRadius: '50%', padding: '4px', border: 'none', cursor: 'pointer' }}
-                        >
-                          ✕
-                        </button>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
+                        <div style={{ position: 'relative', display: 'inline-block' }}>
+                          <img src={imagePreview} alt="Preview" style={{ height: '150px', objectFit: 'contain', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
+                          <button
+                            type="button"
+                            onClick={() => { setImagePreview(null); setUploadForm(f => ({ ...f, imageUrl: '' })); }}
+                            style={{ position: 'absolute', top: '-10px', right: '-10px', background: 'var(--danger)', color: '#fff', borderRadius: '50%', padding: '6px', border: 'none', cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.2)', width: '26px', height: '26px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.85rem' }}
+                            title="Remove Photo"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          <button
+                            type="button"
+                            onClick={() => galleryInputRef.current?.click()}
+                            className="btn btn-sm btn-secondary"
+                            style={{ gap: '0.35rem', fontSize: '0.8rem' }}
+                          >
+                            <FolderOpen size={14} /> Change from Gallery
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => cameraInputRef.current?.click()}
+                            className="btn btn-sm btn-secondary"
+                            style={{ gap: '0.35rem', fontSize: '0.8rem' }}
+                          >
+                            <Camera size={14} /> Retake Photo
+                          </button>
+                        </div>
                       </div>
                     ) : (
-                      <label style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
-                        <Camera size={32} color="var(--primary)" />
-                        <span style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--primary)' }}>
-                          Take Photo with Camera or Browse Gallery
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.85rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--primary)' }}>
+                          <ImageIcon size={32} />
+                          <Camera size={28} style={{ opacity: 0.8 }} />
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-main)' }}>
+                            Add Product Photo
+                          </div>
+                          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                            Upload image file from device gallery/browser or capture with camera
+                          </div>
+                        </div>
+
+                        {/* Dual Action Buttons */}
+                        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'center', width: '100%', marginTop: '0.25rem' }}>
+                          <button
+                            type="button"
+                            onClick={() => galleryInputRef.current?.click()}
+                            className="btn btn-primary"
+                            style={{ padding: '0.65rem 1.25rem', borderRadius: '12px', gap: '0.5rem', fontSize: '0.88rem', fontWeight: 700 }}
+                          >
+                            <FolderOpen size={18} />
+                            Upload from Gallery / Browser
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => cameraInputRef.current?.click()}
+                            className="btn btn-secondary"
+                            style={{ padding: '0.65rem 1.25rem', borderRadius: '12px', gap: '0.5rem', fontSize: '0.88rem', fontWeight: 700 }}
+                          >
+                            <Camera size={18} />
+                            Take Photo (Camera)
+                          </button>
+                        </div>
+
+                        <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                          PNG, JPG, JPEG, WEBP formats accepted • Drag & drop supported
                         </span>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                          PNG, JPG, WEBP formats accepted
-                        </span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          capture="environment"
-                          onChange={handleImageFileChange}
-                          style={{ display: 'none' }}
-                        />
-                      </label>
+                      </div>
                     )}
                   </div>
                 </div>
