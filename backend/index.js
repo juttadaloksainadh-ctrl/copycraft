@@ -28,26 +28,41 @@ const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:3000')
   .map(o => o.trim())
   .filter(Boolean);
 
+// Allowed mobile and local schemes
+const isMobileOrAllowedOrigin = (origin) => {
+  if (!origin || origin === 'null') return true;
+  if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) return true;
+  if (
+    origin.includes('localhost') ||
+    origin.includes('127.0.0.1') ||
+    origin.startsWith('capacitor://') ||
+    origin.startsWith('ionic://') ||
+    origin.startsWith('http://localhost') ||
+    origin.startsWith('https://localhost') ||
+    origin.startsWith('android-app://') ||
+    origin.startsWith('file://') ||
+    origin.endsWith('.vercel.app') ||
+    origin.endsWith('.pages.dev') ||
+    origin.endsWith('.onrender.com')
+  ) {
+    return true;
+  }
+  return false;
+};
+
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow non-browser requests (curl, mobile apps, health checks) with no Origin
-    if (!origin) return callback(null, true);
-
-    // If wildcard '*' is in allowedOrigins or development mode, allow all
-    if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-
-    // Also allow common localhost and preview domains if not strictly locked down
-    if (origin.includes('localhost') || origin.includes('127.0.0.1') || origin.endsWith('.vercel.app') || origin.endsWith('.pages.dev') || origin.endsWith('.onrender.com')) {
+    if (isMobileOrAllowedOrigin(origin)) {
       return callback(null, true);
     }
 
     console.warn(`⚠️  CORS blocked request from origin: ${origin}`);
     console.warn(`   → Allowed origins: ${allowedOrigins.join(', ')}`);
-    return callback(new Error('Not allowed by CORS'));
+    return callback(null, false);
   },
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
 }));
 
 app.use(express.json({ limit: `${process.env.MAX_FILE_SIZE_MB || 50}mb` }));

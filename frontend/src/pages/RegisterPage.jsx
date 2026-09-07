@@ -29,7 +29,7 @@ export default function RegisterPage({ onNavigate }) {
       const res = await apiFetch('/orders/colleges');
       if (res.success && res.colleges?.length > 0) {
         setColleges(res.colleges);
-        setFormData(prev => ({ ...prev, collegeId: res.colleges[0].id }));
+        setFormData(prev => ({ ...prev }));
       }
     } catch (e) {}
   };
@@ -203,6 +203,7 @@ export default function RegisterPage({ onNavigate }) {
               value={formData.collegeId}
               onChange={e => setFormData({ ...formData, collegeId: e.target.value })}
             >
+              <option value="" disabled>Select Campus</option>
               {colleges.map(c => (
                 <option key={c.id} value={c.id}>{c.name} ({c.city})</option>
               ))}

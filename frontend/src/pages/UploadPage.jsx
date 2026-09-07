@@ -26,9 +26,9 @@ export default function UploadPage({ onNavigate }) {
     printMode: 'bw',
     sideMode: 'double',
     paperSize: 'A4',
-    binding: 'spiral',
+    binding: 'none',
     lamination: 'none',
-    coverSheet: 'transparent',
+    coverSheet: 'none',
     quantity: 1
   });
 

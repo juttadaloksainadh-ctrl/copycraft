@@ -1,19 +1,56 @@
 {
+  "id": "/",
   "short_name": "CopyCraft",
   "name": "CopyCraft - Campus Document Printing & Express Delivery",
   "description": "Next-generation campus document printing and express delivery platform.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui", "browser"],
+  "orientation": "portrait-primary",
+  "background_color": "#0f172a",
+  "theme_color": "#4f46e5",
+  "categories": ["productivity", "utilities", "education"],
   "icons": [
     {
       "src": "/logo.png",
       "type": "image/png",
-      "sizes": "192x192 512x512",
-      "purpose": "any maskable"
+      "sizes": "192x192",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/logo.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "maskable"
     }
   ],
-  "start_url": "/",
-  "background_color": "#0f172a",
-  "theme_color": "#4f46e5",
-  "display": "standalone",
-  "orientation": "portrait-primary",
-  "categories": ["productivity", "utilities", "education"]
+  "shortcuts": [
+    {
+      "name": "Order Prints",
+      "short_name": "Print",
+      "description": "Upload and customize documents for printing",
+      "url": "/?portal=customer",
+      "icons": [{ "src": "/logo.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Dealer Dashboard",
+      "short_name": "Dealer",
+      "description": "Access dealer printing queue",
+      "url": "/?portal=dealer",
+      "icons": [{ "src": "/logo.png", "sizes": "192x192" }]
+    }
+  ]
 }
