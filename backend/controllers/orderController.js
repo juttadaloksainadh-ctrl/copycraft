@@ -360,7 +360,7 @@ export const cancelOrder = (req, res) => {
 
   if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
 
-  if (['DELIVERED', 'CANCELLED', 'OUT_FOR_DELIVERY'].includes(order.orderStatus)) {
+  if (['DELIVERED', 'CANCELLED', 'OUT_FOR_DELIVERY', 'PRINTED'].includes(order.orderStatus)) {
     return res.status(400).json({ success: false, message: `Cannot cancel order in status '${order.orderStatus}'` });
   }
 

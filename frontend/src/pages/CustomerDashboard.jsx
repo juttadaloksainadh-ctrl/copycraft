@@ -59,6 +59,22 @@ export default function CustomerDashboard({ onNavigate }) {
     }
   };
 
+  // Cancel order handler for customer portal
+  const handleCancelOrder = async (orderId) => {
+    try {
+      const res = await apiFetch(`/orders/${orderId}/cancel`, { method: 'POST' });
+      if (res.success) {
+        addToast('Order cancelled successfully', 'success');
+        fetchOrders();
+      } else {
+        addToast(res.message || 'Failed to cancel order', 'error');
+      }
+    } catch (e) {
+      addToast('Error cancelling order', 'error');
+    }
+  };
+
+
   const fetchAssignedDistributor = async () => {
     try {
       const res = await apiFetch('/orders/staff/active');
@@ -94,9 +110,16 @@ export default function CustomerDashboard({ onNavigate }) {
     {
       header: 'Actions',
       cell: row => (
-        <button className="btn btn-sm btn-secondary" onClick={() => setSelectedOrder(row)} style={{ gap: '0.3rem' }}>
-          <Eye size={14} /> Track
-        </button>
+        <>
+          <button className="btn btn-sm btn-secondary" onClick={() => setSelectedOrder(row)} style={{ gap: '0.3rem' }}>
+            <Eye size={14} /> Track
+          </button>
+          { !['DELIVERED','CANCELLED','OUT_FOR_DELIVERY','PRINTED'].includes(row.orderStatus) && (
+            <button className="btn btn-sm btn-danger" onClick={() => handleCancelOrder(row.id)} style={{ marginLeft: '0.3rem', gap: '0.3rem' }}>
+              Cancel
+            </button>
+          )}
+        </>
       )
     }
   ];

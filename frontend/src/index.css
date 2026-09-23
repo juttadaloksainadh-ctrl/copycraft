@@ -3,59 +3,7 @@
    Inspired by Stripe, Linear, Vercel & Apple aesthetics
    ---------------------------------------------------- */
 
-:root {
-  /* Color Palette - Light Mode */
-  --primary: #2563EB;
-  --primary-hover: #1D4ED8;
-  --primary-light: rgba(37, 99, 235, 0.08);
-  --primary-glow: rgba(37, 99, 235, 0.35);
-
-  --secondary: #1E293B;
-  --accent: #06B6D4;
-  --accent-light: rgba(6, 182, 212, 0.1);
-
-  --success: #22C55E;
-  --success-bg: rgba(34, 197, 94, 0.1);
-  --warning: #F59E0B;
-  --warning-bg: rgba(245, 158, 11, 0.1);
-  --danger: #EF4444;
-  --danger-bg: rgba(239, 68, 68, 0.1);
-
-  /* Surface & Background Colors */
-  --bg-app: #F8FAFC;
-  --bg-surface: #FFFFFF;
-  --bg-surface-elevated: #FFFFFF;
-  --bg-glass: rgba(255, 255, 255, 0.75);
-
-  /* Borders & Shadows */
-  --border-color: #E2E8F0;
-  --border-focus: #93C5FD;
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
-  --shadow-glow: 0 0 25px rgba(37, 99, 235, 0.15);
-
-  /* Typography Colors */
-  --text-main: #0F172A;
-  --text-muted: #64748B;
-  --text-subtle: #94A3B8;
-  --text-inverse: #FFFFFF;
-
-  /* Font Families */
-  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-heading: 'Outfit', var(--font-sans);
-  --font-mono: 'JetBrains Mono', monospace;
-
-  /* Radii */
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 18px;
-  --radius-full: 9999px;
-
-  /* Transitions */
-  --transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-}
+@import "./styles/theme.css";
 
 /* Dark Mode Theme Overrides */
 [data-theme='dark'] {
