@@ -91,9 +91,7 @@ export async function uploadFile(buffer, key, contentType, metadata = {}) {
 
   await s3Client.send(command);
 
-  const url = R2_PUBLIC_URL
-    ? `${R2_PUBLIC_URL}/${key}`
-    : `https://${R2_BUCKET_NAME}.${R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${key}`;
+  const url = getR2Url(key);
 
   return {
     key,
@@ -190,6 +188,130 @@ export async function fileExists(key) {
   } catch {
     return false;
   }
+}
+
+export function getR2Url(key) {
+  return R2_PUBLIC_URL
+    ? `${R2_PUBLIC_URL}/${key}`
+    : `https://${R2_BUCKET_NAME}.${R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${key}`;
+}
+
+/**
+ * Generate a secure, user-isolated R2 key for direct client uploads.
+ *
+ * @param {string} userId - Authenticated user ID
+ * @param {string} fileId - Server-generated unique file ID
+ * @param {string} originalName - Original filename
+ * @returns {string} Sanitized R2 key
+ */
+export function generateUploadKey(userId, fileId, originalName) {
+  const sanitized = String(originalName || 'file')
+    .replace(/[^a-zA-Z0-9._-]/g, '_')
+    .replace(/^\.+/, '');
+  const sanitizedUserId = String(userId || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '_');
+  const sanitizedFileId = String(fileId || 'file').replace(/[^a-zA-Z0-9_-]/g, '_');
+  return `orders/uploads/${sanitizedUserId}/${sanitizedFileId}_${sanitized}`;
+}
+
+/**
+ * Generate a pre-signed PUT upload URL for direct-to-R2 uploads.
+ *
+ * @param {string} key - R2 object storage key
+ * @param {string} contentType - MIME type of the file
+ * @param {object} metadata - Metadata tags to embed with the object
+ * @param {number} expiresIn - Validity in seconds (default: 900 / 15 minutes)
+ * @returns {Promise<{uploadUrl: string, key: string, method: string, headers: object, expiresIn: number}>}
+ */
+export async function getUploadPresignedUrl(key, contentType, metadata = {}, expiresIn = 900) {
+  if (!isR2Configured()) {
+    throw new Error('Cloudflare R2 is not configured');
+  }
+
+  const command = new PutObjectCommand({
+    Bucket: R2_BUCKET_NAME,
+    Key: key,
+    ContentType: contentType,
+    Metadata: {
+      uploadedAt: new Date().toISOString(),
+      ...metadata,
+    },
+  });
+
+  const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn });
+  return {
+    uploadUrl,
+    key,
+    method: 'PUT',
+    headers: {
+      'Content-Type': contentType,
+    },
+    expiresIn,
+  };
+}
+
+/**
+ * Get object metadata from R2 (size, content type, custom metadata).
+ *
+ * @param {string} key - R2 object key
+ * @returns {Promise<{contentLength: number, contentType: string, lastModified: Date, metadata: object, etag: string}>}
+ */
+export async function getObjectMetadata(key) {
+  if (!isR2Configured()) {
+    throw new Error('Cloudflare R2 is not configured');
+  }
+
+  const command = new HeadObjectCommand({
+    Bucket: R2_BUCKET_NAME,
+    Key: key,
+  });
+
+  const response = await s3Client.send(command);
+  return {
+    contentLength: response.ContentLength,
+    contentType: response.ContentType,
+    lastModified: response.LastModified,
+    metadata: response.Metadata || {},
+    etag: response.ETag,
+  };
+}
+
+/**
+ * Fetch the binary Buffer of an object stored in R2.
+ * Used for server-side verification and PDF page counting.
+ *
+ * @param {string} key - R2 object key
+ * @returns {Promise<Buffer>}
+ */
+export async function getObjectBuffer(key) {
+  if (!isR2Configured()) {
+    throw new Error('Cloudflare R2 is not configured');
+  }
+
+  const command = new GetObjectCommand({
+    Bucket: R2_BUCKET_NAME,
+    Key: key,
+  });
+
+  const response = await s3Client.send(command);
+  if (response.Body && typeof response.Body.transformToByteArray === 'function') {
+    const bytes = await response.Body.transformToByteArray();
+    return Buffer.from(bytes);
+  }
+
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    response.Body.on('data', chunk => chunks.push(chunk));
+    response.Body.on('end', () => resolve(Buffer.concat(chunks)));
+    response.Body.on('error', reject);
+  });
+}
+
+/**
+ * Configure or reset S3 client for automated test suites.
+ */
+export function setR2ClientForTesting(client = null) {
+  s3Client = client;
+  r2Configured = client !== null;
 }
 
 /**

@@ -1,23 +1,346 @@
-/**
- * CopyCraft — File Download/Delete Routes
- * -----------------------------------------
- * Handles file access from Cloudflare R2 storage.
- * Dealers download customer print files via pre-signed URLs.
- * Admins can delete files from R2.
- */
-
 import express from 'express';
+import crypto from 'crypto';
 import { authenticateToken } from '../middleware/authMiddleware.js';
+import { generateToken, verifyToken } from '../config/jwt.js';
+import { extractFileMetadata } from '../services/pdfService.js';
+import { analyzeDocumentAI } from '../services/aiService.js';
 import {
   isR2Configured,
   getDownloadUrl,
   deleteFile,
   listFiles,
-  fileExists
+  fileExists,
+  getUploadPresignedUrl,
+  getObjectMetadata,
+  getObjectBuffer,
+  generateUploadKey,
+  getR2Url
 } from '../services/r2Storage.js';
 import { db } from '../models/dbStore.js';
 
 const router = express.Router();
+
+const ALLOWED_EXTENSIONS = /\.(pdf|doc|docx|ppt|pptx|jpg|jpeg|png|webp)$/i;
+
+const ALLOWED_MIME_TYPES = new Set([
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'application/octet-stream',
+]);
+
+const MAX_FILE_SIZE_BYTES = (parseInt(process.env.MAX_FILE_SIZE_MB, 10) || 50) * 1024 * 1024;
+
+/**
+ * POST /api/files/presign-upload
+ * Generate secure presigned PUT URLs for direct browser-to-R2 file uploads.
+ * Enforces authenticated user binding, unique server fileIds, allowed file formats, and max size.
+ */
+export const presignUploadHandler = async (req, res) => {
+  try {
+    const { files } = req.body;
+
+    if (!files || !Array.isArray(files) || files.length === 0) {
+      return res.status(400).json({ success: false, message: 'At least one file descriptor is required' });
+    }
+
+    if (files.length > 10) {
+      return res.status(400).json({ success: false, message: 'Maximum 10 files allowed per upload batch' });
+    }
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const rawName = String(file.fileName || file.name || '').trim();
+
+      if (!rawName) {
+        return res.status(400).json({ success: false, message: `File at index ${i} is missing fileName` });
+      }
+
+      // Security check: reject directory traversal attempts
+      if (rawName.includes('..') || rawName.includes('/') || rawName.includes('\\')) {
+        return res.status(400).json({ success: false, message: `Invalid filename format for "${rawName}"` });
+      }
+
+      // Validate extension
+      if (!rawName.match(ALLOWED_EXTENSIONS)) {
+        return res.status(400).json({
+          success: false,
+          message: `Unsupported file type for "${rawName}". Allowed formats: PDF, DOCX, PPTX, JPG, PNG, WEBP.`
+        });
+      }
+
+      // Validate declared size
+      const declaredSize = Number(file.fileSize || file.size || 0);
+      if (declaredSize > MAX_FILE_SIZE_BYTES) {
+        return res.status(400).json({
+          success: false,
+          message: `File "${rawName}" exceeds the maximum allowed size of 50MB.`
+        });
+      }
+    }
+
+    // Graceful fallback when Cloudflare R2 is not configured
+    if (!isR2Configured()) {
+      return res.json({
+        success: true,
+        directUploadSupported: false,
+        storageMode: 'memory',
+        message: 'Cloudflare R2 is not configured. Use multipart POST /api/orders/upload instead.',
+      });
+    }
+
+    const userId = req.user?.id || 'unknown';
+    const presignedFiles = [];
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const rawName = String(file.fileName || file.name || '').trim();
+      const declaredSize = Number(file.fileSize || file.size || 0);
+
+      // Resolve and sanitize MIME type
+      let mimeType = String(file.mimeType || file.type || '').toLowerCase();
+      if (!mimeType || !ALLOWED_MIME_TYPES.has(mimeType)) {
+        const ext = rawName.split('.').pop().toLowerCase();
+        const mimeMap = {
+          pdf: 'application/pdf',
+          doc: 'application/msword',
+          docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          ppt: 'application/vnd.ms-powerpoint',
+          pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+          jpg: 'image/jpeg',
+          jpeg: 'image/jpeg',
+          png: 'image/png',
+          webp: 'image/webp'
+        };
+        mimeType = mimeMap[ext] || 'application/octet-stream';
+      }
+
+      // Generate server-controlled, cryptographically random fileId
+      const fileId = `file_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+
+      // Strict server-generated R2 key incorporating userId and fileId
+      const r2Key = generateUploadKey(userId, fileId, rawName);
+
+      // Issue pre-signed PUT upload URL valid for 15 minutes (900 seconds)
+      const presigned = await getUploadPresignedUrl(r2Key, mimeType, {
+        uploadedBy: userId,
+        fileId,
+        originalName: rawName
+      }, 900);
+
+      // Issue signed upload token binding user, fileId, key, and filename
+      const uploadToken = generateToken({
+        userId,
+        fileId,
+        r2Key,
+        fileName: rawName,
+        mimeType
+      }, '15m');
+
+      presignedFiles.push({
+        fileId,
+        fileName: rawName,
+        mimeType,
+        fileSize: declaredSize,
+        r2Key,
+        uploadUrl: presigned.uploadUrl,
+        method: 'PUT',
+        headers: presigned.headers,
+        uploadToken,
+        expiresIn: 900
+      });
+    }
+
+    return res.json({
+      success: true,
+      directUploadSupported: true,
+      storageMode: 'cloudflare_r2',
+      files: presignedFiles
+    });
+  } catch (error) {
+    console.error('Presign upload error:', error);
+    return res.status(500).json({ success: false, message: error.message || 'Failed to generate upload URL' });
+  }
+};
+
+/**
+ * POST /api/files/verify-upload
+ * Verify completed direct uploads to R2:
+ * 1. Validates user-file binding to prevent object key forgery
+ * 2. Verifies actual file size in R2 against 50MB limit
+ * 3. Extracts verified PDF page count and runs AI analysis
+ * 4. Returns canonical file objects compatible with order creation
+ */
+export const verifyUploadHandler = async (req, res) => {
+  try {
+    if (!isR2Configured()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cloudflare R2 is not configured in this environment.'
+      });
+    }
+
+    const { files } = req.body;
+    if (!files || !Array.isArray(files) || files.length === 0) {
+      return res.status(400).json({ success: false, message: 'No uploaded files provided for verification' });
+    }
+
+    if (files.length > 10) {
+      return res.status(400).json({ success: false, message: 'Maximum 10 files allowed per verification batch' });
+    }
+
+    const userId = req.user?.id || 'unknown';
+    const processedFiles = [];
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const fileId = String(file.fileId || file.id || '').trim();
+      const rawName = String(file.fileName || file.name || '').trim();
+      const r2Key = String(file.r2Key || '').trim();
+      const uploadToken = file.uploadToken;
+
+      if (!fileId || !r2Key || !rawName) {
+        return res.status(400).json({
+          success: false,
+          message: `File at index ${i} is missing required fields (fileId, fileName, or r2Key)`
+        });
+      }
+
+      // Security Check 1: Key format & Path traversal prevention
+      if (r2Key.includes('..') || r2Key.includes('\\') || rawName.includes('..')) {
+        return res.status(400).json({
+          success: false,
+          message: `Illegal path characters detected in key: "${r2Key}"`
+        });
+      }
+
+      // Security Check 2: Strict user and file ID prefix binding
+      const expectedPrefix = `orders/uploads/${userId}/${fileId}_`;
+      if (!r2Key.startsWith(expectedPrefix)) {
+        return res.status(403).json({
+          success: false,
+          message: `Unauthorized R2 object key: Key does not belong to the authenticated user and file ID session.`
+        });
+      }
+
+      // Security Check 3: Cryptographic upload token verification if provided
+      if (uploadToken) {
+        const decoded = verifyToken(uploadToken);
+        if (!decoded || decoded.userId !== userId || decoded.fileId !== fileId || decoded.r2Key !== r2Key) {
+          return res.status(403).json({
+            success: false,
+            message: `Upload token validation failed: token is expired, forged, or mismatched.`
+          });
+        }
+      }
+
+      // Security Check 4: Inspect actual object metadata in R2 via HeadObjectCommand
+      let objectMeta;
+      try {
+        objectMeta = await getObjectMetadata(r2Key);
+      } catch (headErr) {
+        return res.status(404).json({
+          success: false,
+          message: `File "${rawName}" was not found in storage. Upload may have failed or timed out.`
+        });
+      }
+
+      const actualSize = objectMeta.contentLength;
+
+      // Size verification
+      if (actualSize <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: `Uploaded file "${rawName}" is empty (0 bytes).`
+        });
+      }
+
+      if (actualSize > MAX_FILE_SIZE_BYTES) {
+        // Immediately purge oversized object from R2 to save space and enforce limit
+        try {
+          await deleteFile(r2Key);
+        } catch (_) {}
+        return res.status(400).json({
+          success: false,
+          message: `File "${rawName}" size (${Math.round(actualSize / 1024 / 1024)}MB) exceeds the maximum allowed limit of 50MB.`
+        });
+      }
+
+      // Security Check 5: Check embedded S3 metadata if present
+      const embeddedMetadata = objectMeta.metadata || {};
+      if (embeddedMetadata.uploadedby && embeddedMetadata.uploadedby !== userId) {
+        return res.status(403).json({
+          success: false,
+          message: `Security violation: Object uploadedBy tag does not match current user session.`
+        });
+      }
+      if (embeddedMetadata.fileid && embeddedMetadata.fileid !== fileId) {
+        return res.status(403).json({
+          success: false,
+          message: `Security violation: Object fileId tag does not match current file ID.`
+        });
+      }
+
+      // Process file metadata & page count
+      const ext = rawName.split('.').pop().toLowerCase();
+      const mimeType = file.mimeType || objectMeta.contentType || 'application/octet-stream';
+      let pageCount = 1;
+
+      if (ext === 'pdf') {
+        try {
+          const fileBuffer = await getObjectBuffer(r2Key);
+          const metaResult = await extractFileMetadata(fileBuffer, rawName, mimeType);
+          pageCount = metaResult.pageCount || 1;
+        } catch (pdfErr) {
+          console.warn(`PDF parsing fallback for ${rawName}:`, pdfErr.message);
+          const metaResult = await extractFileMetadata(null, rawName, mimeType);
+          pageCount = metaResult.pageCount || 1;
+        }
+      } else {
+        const metaResult = await extractFileMetadata(null, rawName, mimeType);
+        pageCount = metaResult.pageCount || 1;
+      }
+
+      // AI Document Intelligence Analysis
+      const aiAnalysis = analyzeDocumentAI(rawName, actualSize, pageCount);
+
+      processedFiles.push({
+        id: fileId,
+        name: rawName,
+        size: actualSize,
+        mimeType,
+        pageCount,
+        printMode: 'bw',
+        sideMode: pageCount >= 4 ? 'double' : 'single',
+        paperSize: 'A4',
+        binding: 'none',
+        lamination: 'none',
+        coverSheet: 'none',
+        r2Key,
+        r2Url: getR2Url(r2Key),
+        ai: aiAnalysis
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: 'Direct upload files verified and analyzed successfully',
+      files: processedFiles,
+      storageMode: 'cloudflare_r2'
+    });
+  } catch (error) {
+    console.error('Verify upload error:', error);
+    return res.status(500).json({ success: false, message: error.message || 'Failed to verify uploaded files' });
+  }
+};
+
+router.post('/presign-upload', authenticateToken, presignUploadHandler);
+router.post('/verify-upload', authenticateToken, verifyUploadHandler);
 
 /**
  * GET /api/files/:orderId/:fileId/download

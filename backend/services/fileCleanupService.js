@@ -66,16 +66,38 @@ export async function runDeliveredFileCleanup() {
     try {
       // A. Delete Cloudflare R2 files
       if (isR2Configured()) {
+        const deletedKeys = new Set();
+
+        // 1. Delete all R2 keys explicitly recorded on the order's files
+        if (order.files && Array.isArray(order.files)) {
+          for (const file of order.files) {
+            if (file && file.r2Key && !deletedKeys.has(file.r2Key)) {
+              try {
+                await deleteFile(file.r2Key);
+                deletedKeys.add(file.r2Key);
+                totalDeletedFiles++;
+                console.log(`   🗑️  Deleted R2 cloud file (order file key): ${file.r2Key}`);
+              } catch (delErr) {
+                console.warn(`   ⚠️ R2 deletion warning for key ${file.r2Key}:`, delErr.message);
+              }
+            }
+          }
+        }
+
+        // 2. Also sweep order folder prefix in case files were stored under orders/${order.id}/
         try {
           const prefix = `orders/${order.id}/`;
           const r2Files = await listFiles(prefix, 200);
           for (const file of r2Files) {
-            await deleteFile(file.key);
-            totalDeletedFiles++;
-            console.log(`   🗑️  Deleted R2 cloud file: ${file.key}`);
+            if (!deletedKeys.has(file.key)) {
+              await deleteFile(file.key);
+              deletedKeys.add(file.key);
+              totalDeletedFiles++;
+              console.log(`   🗑️  Deleted R2 cloud file (prefix): ${file.key}`);
+            }
           }
         } catch (r2Err) {
-          console.error(`⚠️ R2 deletion error for order ${order.id}:`, r2Err.message);
+          console.error(`⚠️ R2 prefix deletion error for order ${order.id}:`, r2Err.message);
         }
       }
 
@@ -135,6 +157,82 @@ export async function runDeliveredFileCleanup() {
 }
 
 /**
+ * Sweep orphaned / abandoned temporary uploads older than 24 hours.
+ * CRITICAL SAFETY GUARANTEE: Never deletes any file key that is currently
+ * referenced by ANY order (active, pending, delivered, or completed) in
+ * MongoDB or in-memory database.
+ */
+export async function runTemporaryUploadCleanup() {
+  if (!isR2Configured()) return;
+
+  try {
+    const now = Date.now();
+    const TEMP_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+    // Build set of all R2 keys referenced by ANY order across the entire system
+    const referencedKeys = new Set();
+
+    // Check in-memory store
+    for (const order of db.orders) {
+      if (order.files && Array.isArray(order.files)) {
+        for (const f of order.files) {
+          if (f && f.r2Key) referencedKeys.add(f.r2Key);
+        }
+      }
+    }
+
+    // Check MongoDB if connected
+    if (isUsingMongo()) {
+      try {
+        const ordersCol = getMongoCollection('orders');
+        if (ordersCol) {
+          const allOrders = await ordersCol.find({}, { projection: { files: 1 } }).toArray();
+          for (const order of allOrders) {
+            if (order.files && Array.isArray(order.files)) {
+              for (const f of order.files) {
+                if (f && f.r2Key) referencedKeys.add(f.r2Key);
+              }
+            }
+          }
+        }
+      } catch (mongoErr) {
+        console.warn('⚠️ MongoDB order query warning in temp cleanup:', mongoErr.message);
+      }
+    }
+
+    // Sweep files under orders/uploads/
+    const uploadFiles = await listFiles('orders/uploads/', 500);
+    let purgedTempCount = 0;
+
+    for (const file of uploadFiles) {
+      // GUARANTEE: Skip any file attached to an existing order
+      if (referencedKeys.has(file.key)) {
+        continue;
+      }
+
+      const lastModifiedTime = file.lastModified ? new Date(file.lastModified).getTime() : 0;
+      const elapsed = now - lastModifiedTime;
+
+      if (elapsed >= TEMP_EXPIRY_MS) {
+        try {
+          await deleteFile(file.key);
+          purgedTempCount++;
+          console.log(`   🗑️ Purged unassociated temporary upload: ${file.key}`);
+        } catch (delErr) {
+          console.warn(`⚠️ Failed to delete temp file ${file.key}:`, delErr.message);
+        }
+      }
+    }
+
+    if (purgedTempCount > 0) {
+      console.log(`🧹 Cleaned up ${purgedTempCount} abandoned temporary upload(s) older than 24h`);
+    }
+  } catch (err) {
+    console.warn('⚠️ Temporary upload cleanup scan error:', err.message);
+  }
+}
+
+/**
  * Start the background cleanup scheduler.
  * Call this once at server startup.
  * Runs immediately on boot, then every 15 minutes thereafter.
@@ -142,15 +240,22 @@ export async function runDeliveredFileCleanup() {
 export function startFileCleanupScheduler() {
   console.log(`⏰ 48-Hour Auto-Purge Scheduler started — automatically deletes files and order records 48 hours after delivery (scans every 15 min)`);
 
-  // Run immediately on startup to catch any orders that were overdue
-  runDeliveredFileCleanup().catch(err => {
-    console.error('⚠️ Initial file cleanup scan failed:', err.message);
-  });
+  const runAllCleanups = async () => {
+    try {
+      await runDeliveredFileCleanup();
+    } catch (err) {
+      console.error('⚠️ Delivered file cleanup scan failed:', err.message);
+    }
+    try {
+      await runTemporaryUploadCleanup();
+    } catch (err) {
+      console.error('⚠️ Temporary file cleanup scan failed:', err.message);
+    }
+  };
+
+  // Run immediately on startup to catch any orders or uploads that were overdue
+  runAllCleanups();
 
   // Then run every 15 minutes
-  setInterval(() => {
-    runDeliveredFileCleanup().catch(err => {
-      console.error('⚠️ Scheduled file cleanup scan failed:', err.message);
-    });
-  }, SWEEP_INTERVAL_MS);
+  setInterval(runAllCleanups, SWEEP_INTERVAL_MS);
 }

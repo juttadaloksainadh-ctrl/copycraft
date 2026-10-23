@@ -1,7 +1,13 @@
 import React, { useState, useRef } from 'react';
 import { UploadCloud, FileText, Trash2, Sparkles, FolderOpen, Smartphone, AlertCircle, RefreshCw } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
-import { apiFetch } from '../../utils/api';
+import {
+  apiFetch,
+  getPresignedUploadUrls,
+  uploadToR2,
+  verifyDirectUpload,
+  uploadFilesMultipart
+} from '../../utils/api';
 
 // Comprehensive MIME types + extensions ensuring mobile Android/iOS file pickers allow document selection
 const ACCEPTED_FILE_TYPES = [
@@ -28,6 +34,7 @@ export default function FileUploader({ onFilesUpdated, files = [] }) {
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStatusText, setUploadStatusText] = useState('');
   const fileInputRef = useRef(null);
   const { addToast } = useToast();
 
@@ -59,43 +66,150 @@ export default function FileUploader({ onFilesUpdated, files = [] }) {
   };
 
   const processUpload = async (uploadedFiles) => {
-    // Validate file sizes
-    const oversizedFiles = uploadedFiles.filter(f => f.size > 50 * 1024 * 1024);
-    if (oversizedFiles.length > 0) {
-      addToast(`File "${oversizedFiles[0].name}" exceeds 50MB limit`, 'error');
+    if (!uploadedFiles || uploadedFiles.length === 0) return;
+
+    // Prevent duplicate concurrent upload triggers
+    if (isUploading) {
+      addToast('An upload is already in progress. Please wait.', 'warning');
       return;
     }
 
-    setIsUploading(true);
-    setUploadProgress(20);
+    if (uploadedFiles.length > 10) {
+      addToast('Maximum 10 files allowed per upload batch', 'error');
+      return;
+    }
 
-    const formData = new FormData();
-    uploadedFiles.forEach(file => formData.append('files', file));
+    // Validate file sizes and empty files before starting network requests
+    for (const file of uploadedFiles) {
+      if (!file.name) {
+        addToast('Invalid file: missing filename', 'error');
+        return;
+      }
+      if (file.size <= 0) {
+        addToast(`File "${file.name}" is empty (0 bytes).`, 'error');
+        return;
+      }
+      if (file.size > 50 * 1024 * 1024) {
+        addToast(`File "${file.name}" exceeds the maximum 50MB limit.`, 'error');
+        return;
+      }
+    }
+
+    setIsUploading(true);
+    setUploadProgress(10);
+    setUploadStatusText('Requesting secure cloud storage authorization...');
 
     try {
-      const progressTimer = setInterval(() => {
-        setUploadProgress(p => (p < 85 ? p + 15 : p));
-      }, 300);
+      // Step 1: Request presigned PUT URLs from authenticated backend
+      const presignRes = await getPresignedUploadUrls(uploadedFiles);
 
-      const res = await apiFetch('/orders/upload', {
-        method: 'POST',
-        body: formData
-      });
+      if (!presignRes.success) {
+        // Handle unauthenticated or backend error
+        if (presignRes.message?.includes('token') || presignRes.message?.includes('Access denied')) {
+          addToast('Please log in to upload documents.', 'warning');
+        } else {
+          addToast(presignRes.message || 'Failed to authorize file upload.', 'error');
+        }
+        return;
+      }
 
-      clearInterval(progressTimer);
-      setUploadProgress(100);
+      // Safe Deliberate Fallback: If backend explicitly reports direct upload is not supported
+      // (e.g. Cloudflare R2 is unconfigured in development/memory mode)
+      if (presignRes.directUploadSupported === false) {
+        console.warn('Direct R2 upload not configured on backend; using deliberate multipart fallback.');
+        setUploadStatusText('Uploading via server storage...');
+        setUploadProgress(30);
 
-      if (res.success && res.files) {
-        onFilesUpdated([...files, ...res.files]);
-        addToast(`${res.files.length} document(s) uploaded and analyzed successfully!`, 'success');
+        const progressTimer = setInterval(() => {
+          setUploadProgress(p => (p < 85 ? p + 15 : p));
+        }, 300);
+
+        const fallbackRes = await uploadFilesMultipart(uploadedFiles);
+        clearInterval(progressTimer);
+        setUploadProgress(100);
+
+        if (fallbackRes.success && Array.isArray(fallbackRes.files)) {
+          onFilesUpdated([...files, ...fallbackRes.files]);
+          addToast(`${fallbackRes.files.length} document(s) uploaded successfully!`, 'success');
+        } else {
+          addToast(fallbackRes.message || 'Error processing file upload.', 'error');
+        }
+        return;
+      }
+
+      const presignedList = presignRes.files;
+      if (!Array.isArray(presignedList) || presignedList.length !== uploadedFiles.length) {
+        addToast('Invalid upload descriptors received from server.', 'error');
+        return;
+      }
+
+      // Step 2: Upload each file directly to Cloudflare R2
+      const totalFiles = uploadedFiles.length;
+      const fileProgresses = new Array(totalFiles).fill(0);
+
+      const updateAggregateProgress = () => {
+        const sum = fileProgresses.reduce((a, b) => a + b, 0);
+        const avg = sum / totalFiles;
+        // Progress scale: 15% (after presign) to 80% (all files uploaded to R2)
+        const mapped = Math.round(15 + (avg * 0.65));
+        setUploadProgress(mapped);
+      };
+
+      setUploadStatusText(`Uploading ${totalFiles} document(s) directly to Cloudflare R2...`);
+
+      // Upload all files directly to Cloudflare R2 in parallel
+      await Promise.all(
+        uploadedFiles.map(async (file, idx) => {
+          const presignedInfo = presignedList[idx];
+          await uploadToR2(
+            presignedInfo.uploadUrl,
+            file,
+            presignedInfo.headers,
+            (percent) => {
+              fileProgresses[idx] = percent;
+              updateAggregateProgress();
+            }
+          );
+        })
+      );
+
+      // Step 3: Backend verification
+      setUploadProgress(85);
+      setUploadStatusText('Verifying files and calculating exact page counts with AI...');
+
+      const verifyDescriptors = presignedList.map(item => ({
+        fileId: item.fileId,
+        fileName: item.fileName,
+        r2Key: item.r2Key,
+        uploadToken: item.uploadToken,
+        mimeType: item.mimeType
+      }));
+
+      const verifyRes = await verifyDirectUpload(verifyDescriptors);
+
+      if (verifyRes.success && Array.isArray(verifyRes.files)) {
+        setUploadProgress(100);
+        setUploadStatusText('Upload and verification complete!');
+        onFilesUpdated([...files, ...verifyRes.files]);
+        addToast(
+          `${verifyRes.files.length} document(s) uploaded directly to R2 and verified!`,
+          'success'
+        );
       } else {
-        addToast(res.message || 'Error processing file upload. Please check your document format.', 'error');
+        addToast(verifyRes.message || 'Server verification failed for uploaded files.', 'error');
       }
     } catch (err) {
-      addToast('Upload failed. Please check your internet connection and try again.', 'error');
+      console.error('Upload flow error:', err);
+      // Detailed error reporting for network or CORS issues
+      const isNetworkError = err.message?.toLowerCase().includes('network') || err.message?.toLowerCase().includes('cors');
+      const errorMsg = isNetworkError
+        ? 'Direct upload connection error. Check your internet connection or Cloudflare R2 CORS settings.'
+        : (err.message || 'Upload failed. Please check network connectivity and try again.');
+      addToast(errorMsg, 'error');
     } finally {
       setIsUploading(false);
       setUploadProgress(0);
+      setUploadStatusText('');
     }
   };
 
@@ -195,7 +309,9 @@ export default function FileUploader({ onFilesUpdated, files = [] }) {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
               <RefreshCw size={18} className="animate-spin" color="var(--primary)" />
-              <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>Uploading & Scanning Document Pages...</div>
+              <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>
+                {uploadStatusText || 'Uploading & Scanning Document Pages...'}
+              </div>
             </div>
             <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--primary)' }}>{uploadProgress}%</span>
           </div>
@@ -210,7 +326,7 @@ export default function FileUploader({ onFilesUpdated, files = [] }) {
             />
           </div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-            CopyCraft AI scanner is calculating page counts, color breakdown, and duplex savings.
+            Direct-to-cloud secure transfer • Server-verified page count & AI analysis
           </div>
         </div>
       )}
