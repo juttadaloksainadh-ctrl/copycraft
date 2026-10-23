@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Key, CheckCircle2, ShieldCheck } from 'lucide-react';
+import { Key, CheckCircle2, ShieldCheck, Clock } from 'lucide-react';
 import Modal from '../common/Modal';
 import { useToast } from '../../context/ToastContext';
+import { formatOrderDate } from '../../utils/dateUtils';
 
 export default function PinVerificationModal({ isOpen, onClose, order, onVerifySuccess }) {
   const [pinInput, setPinInput] = useState('');
@@ -44,6 +45,12 @@ export default function PinVerificationModal({ isOpen, onClose, order, onVerifyS
 
         <div>
           <h4 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Order #{order?.id}</h4>
+          {formatOrderDate(order) && (
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', marginTop: '0.2rem' }}>
+              <Clock size={12} color="var(--primary)" />
+              <span>Placed: {formatOrderDate(order)}</span>
+            </div>
+          )}
           <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
             Ask the customer for their <span style={{ fontWeight: 700 }}>6-digit delivery PIN</span> at location <span style={{ fontWeight: 700 }}>{order?.deliveryLocation}</span> to confirm handover.
           </p>

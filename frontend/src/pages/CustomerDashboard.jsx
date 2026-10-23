@@ -13,6 +13,7 @@ import { usePwa } from '../context/PwaContext';
 import ProfilePage from '../components/common/ProfilePage';
 import StationeryStoreSection from '../components/customer/StationeryStoreSection';
 import { Printer, UploadCloud, Clock, Gift, Phone, HelpCircle, Eye, ShieldCheck, Plus, MessageSquare, RefreshCw, Truck, Download } from 'lucide-react';
+import { formatOrderDate } from '../utils/dateUtils';
 
 
 
@@ -103,7 +104,15 @@ export default function CustomerDashboard({ onNavigate }) {
 
   const columns = [
     { header: 'Order ID', accessor: 'id', cell: row => <span style={{ fontWeight: 700 }}>{row.id}</span> },
-    { header: 'Date', accessor: 'createdAt', cell: row => new Date(row.createdAt).toLocaleDateString() },
+    {
+      header: 'Date & Time',
+      accessor: 'createdAt',
+      cell: row => (
+        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+          {formatOrderDate(row, { fallback: '—' })}
+        </span>
+      )
+    },
     { header: 'Files', cell: row => `${row.files?.length || 1} Document(s)` },
     { header: 'Total Price', accessor: 'finalPrice', cell: row => <span style={{ fontWeight: 700, color: 'var(--primary)' }}>₹{row.pricing?.finalPrice}</span> },
     { header: 'Status', cell: row => <Badge status={row.orderStatus} /> },

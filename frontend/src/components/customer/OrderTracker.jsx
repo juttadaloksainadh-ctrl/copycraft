@@ -1,6 +1,7 @@
 import React from 'react';
 import { CheckCircle2, Clock, Printer, Package, Truck, Key, Check } from 'lucide-react';
 import Badge from '../common/Badge';
+import { formatOrderDate } from '../../utils/dateUtils';
 
 export default function OrderTracker({ order }) {
   if (!order) return null;
@@ -25,6 +26,12 @@ export default function OrderTracker({ order }) {
           <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             {order.id}
           </h3>
+          {formatOrderDate(order) && (
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.35rem', marginTop: '3px' }}>
+              <Clock size={13} color="var(--primary)" />
+              <span>Placed: {formatOrderDate(order)}</span>
+            </div>
+          )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           <Badge status={order.orderStatus} />

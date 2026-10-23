@@ -12,8 +12,9 @@ import ProfilePage from '../components/common/ProfilePage';
 import confetti from 'canvas-confetti';
 import {
   Truck, Building2, Users, DollarSign, UserCheck, RefreshCw,
-  Phone, ShieldCheck, CreditCard, Banknote, CheckCircle2, Key, Check, Printer
+  Phone, ShieldCheck, CreditCard, Banknote, CheckCircle2, Key, Check, Printer, Clock
 } from 'lucide-react';
+import { formatOrderDate } from '../utils/dateUtils';
 
 
 export default function DistributorDashboard() {
@@ -173,7 +174,21 @@ export default function DistributorDashboard() {
   ];
 
   const orderColumns = [
-    { header: 'Order ID', accessor: 'id', cell: row => <span style={{ fontWeight: 700 }}>{row.id}</span> },
+    {
+      header: 'Order ID',
+      accessor: 'id',
+      cell: row => (
+        <div>
+          <span style={{ fontWeight: 700 }}>{row.id}</span>
+          {formatOrderDate(row) && (
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '3px', marginTop: '2px' }}>
+              <Clock size={11} color="var(--primary)" />
+              <span>{formatOrderDate(row)}</span>
+            </div>
+          )}
+        </div>
+      )
+    },
     {
       header: 'Customer Details',
       cell: row => (
@@ -446,6 +461,12 @@ export default function DistributorDashboard() {
               <div>Customer: {assignModalOrder?.customerName}</div>
               <div>College: {assignModalOrder?.collegeName || '—'}</div>
               <div>Destination: {assignModalOrder?.deliveryLocation || '—'}</div>
+              {formatOrderDate(assignModalOrder) && (
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <Clock size={12} color="var(--primary)" />
+                  <span>Placed: {formatOrderDate(assignModalOrder)}</span>
+                </div>
+              )}
               <div style={{ marginTop: '0.25rem' }}>
                 Total Bill: <strong style={{ color: 'var(--primary)', fontSize: '0.95rem' }}>₹{(assignModalOrder?.pricing?.finalPrice || 0).toFixed(2)}</strong>
               </div>
@@ -510,6 +531,12 @@ export default function DistributorDashboard() {
 
               <div>
                 <h4 style={{ fontSize: '1.2rem', fontWeight: 800 }}>Order #{deliveringOrder.id}</h4>
+                {formatOrderDate(deliveringOrder) && (
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', marginTop: '0.2rem' }}>
+                    <Clock size={12} color="var(--primary)" />
+                    <span>Placed: {formatOrderDate(deliveringOrder)}</span>
+                  </div>
+                )}
                 <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
                   Ask customer <strong style={{ color: 'var(--text-main)' }}>{deliveringOrder.customerName}</strong> ({deliveringOrder.customerPhone || 'N/A'}) for their <strong style={{ color: 'var(--primary)' }}>6-digit Delivery PIN</strong> at <strong style={{ color: 'var(--text-main)' }}>{deliveringOrder.deliveryLocation}</strong>.
                 </p>

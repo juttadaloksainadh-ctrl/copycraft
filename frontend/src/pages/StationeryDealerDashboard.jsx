@@ -10,8 +10,9 @@ import ProfilePage from '../components/common/ProfilePage';
 import {
   ShoppingBag, PlusCircle, Package, RefreshCw, Phone, MapPin,
   CheckCircle, Truck, Camera, Upload, Trash2, Edit2, DollarSign, ToggleLeft, ToggleRight,
-  Image as ImageIcon, FolderOpen
+  Image as ImageIcon, FolderOpen, Clock
 } from 'lucide-react';
+import { formatOrderDate } from '../utils/dateUtils';
 
 export default function StationeryDealerDashboard({ onNavigate }) {
   const { user } = useAuth();
@@ -240,6 +241,12 @@ export default function StationeryDealerDashboard({ onNavigate }) {
                         <div>
                           <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>STATIONERY ORDER</div>
                           <div style={{ fontSize: '1.1rem', fontWeight: 800 }}>{order.id}</div>
+                          {formatOrderDate(order) && (
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.3rem', marginTop: '3px' }}>
+                              <Clock size={12} color="var(--primary)" />
+                              <span>Placed: {formatOrderDate(order)}</span>
+                            </div>
+                          )}
                         </div>
                         <Badge status={order.orderStatus} />
                       </div>

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Printer, Download, Phone, MapPin, CheckCircle, Package, ArrowRight, FileText, Layers, BookOpen, Palette, Copy, Loader2, Send } from 'lucide-react';
+import { Printer, Download, Phone, MapPin, CheckCircle, Package, ArrowRight, FileText, Layers, BookOpen, Palette, Copy, Loader2, Send, Clock } from 'lucide-react';
 import Badge from '../common/Badge';
 import { getFileDownloadUrl } from '../../utils/api';
 import { useToast } from '../../context/ToastContext';
+import { formatOrderDate } from '../../utils/dateUtils';
 
 // Human-readable labels for print spec values
 const SPEC_LABELS = {
@@ -75,11 +76,17 @@ export default function PrintQueueCard({ order, onStatusChange }) {
 
   return (
     <div className="card card-hover" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', borderLeft: `4px solid ${isDispatchedOrDelivered ? 'var(--success)' : isPrinted ? 'var(--primary)' : 'var(--border-color)'}` }}>
-      {/* Header — Order ID */}
+      {/* Header — Order ID & Creation Timestamp */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
         <div>
           <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>ORDER ID</div>
           <div style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>{order.id}</div>
+          {formatOrderDate(order) && (
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.3rem', marginTop: '3px' }}>
+              <Clock size={12} color="var(--primary)" />
+              <span>Placed: {formatOrderDate(order)}</span>
+            </div>
+          )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <Badge status={order.orderStatus} />

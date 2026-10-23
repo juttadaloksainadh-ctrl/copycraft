@@ -25,6 +25,7 @@ import {
   AlertOctagon,
   FileText
 } from 'lucide-react';
+import { formatOrderDate } from '../utils/dateUtils';
 
 export default function AdminDashboard() {
   const { user } = useAuth();
@@ -473,9 +474,10 @@ export default function AdminDashboard() {
     { header: 'Status', cell: row => <Badge status={row.orderStatus} /> },
     {
       header: 'Date & Time',
+      accessor: 'createdAt',
       cell: row => (
-        <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-          {new Date(row.createdAt || row.timeline?.[0]?.time || Date.now()).toLocaleString()}
+        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+          {formatOrderDate(row, { fallback: '—' })}
         </span>
       )
     }
