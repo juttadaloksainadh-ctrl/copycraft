@@ -266,7 +266,7 @@ export const deleteStationeryItem = async (req, res) => {
  */
 export const createStationeryOrder = async (req, res) => {
   try {
-    const { items, deliveryLocation, paymentMethod, collegeName, yearOfStudy, branch } = req.body;
+    const { items, deliveryLocation, paymentMethod, collegeName, collegeId, yearOfStudy, branch } = req.body;
     const user = req.user;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -276,6 +276,96 @@ export const createStationeryOrder = async (req, res) => {
     const orderId = `STAT-${Date.now().toString().slice(-6)}`;
     const totalAmount = items.reduce((sum, item) => sum + (Number(item.price || 0) * Number(item.quantity || 1)), 0);
 
+    // 1. Resolve College from db.colleges or active MongoDB collection
+    let allColleges = db.colleges || [];
+    let allUsers = db.users || [];
+
+    if (isUsingMongo()) {
+      try {
+        const collegesCol = getMongoCollection('colleges');
+        const usersCol = getMongoCollection('users');
+        if (collegesCol) {
+          const mColleges = await collegesCol.find({}).toArray();
+          if (mColleges && mColleges.length > 0) allColleges = mColleges;
+        }
+        if (usersCol) {
+          const mUsers = await usersCol.find({ role: { $in: ['distributor', 'dealer', 'stationery_dealer'] } }).toArray();
+          if (mUsers && mUsers.length > 0) allUsers = mUsers;
+        }
+      } catch (_) {}
+    }
+
+    const targetCollegeId = collegeId || user?.collegeId || '';
+    const matchedCollege = allColleges.find(c => collegeName && c.name.toLowerCase() === collegeName.toLowerCase()) ||
+                           allColleges.find(c => targetCollegeId && c.id === targetCollegeId) ||
+                           (items[0]?.collegeId ? allColleges.find(c => c.id === items[0].collegeId) : null) ||
+                           null;
+
+    const finalCollegeId = matchedCollege ? matchedCollege.id : targetCollegeId;
+    const finalCollegeName = matchedCollege ? matchedCollege.name : (collegeName || user?.collegeName || 'Campus Hub');
+
+    // 2. Resolve Designated Distributor (Unambiguous only; never guess)
+    let designatedDistributor = null;
+    if (finalCollegeId) {
+      const matchingDistributors = allUsers.filter(u =>
+        u.role === 'distributor' && (
+          u.collegeId === finalCollegeId ||
+          (Array.isArray(u.collegeIds) && u.collegeIds.includes(finalCollegeId))
+        )
+      );
+      if (matchingDistributors.length === 1) {
+        designatedDistributor = matchingDistributors[0];
+      }
+      // If 0 or > 1 (ambiguous): remains null, never guess.
+    }
+
+    // 3. Resolve Designated Dealer (Unambiguous only; never guess)
+    let designatedDealer = null;
+    if (finalCollegeId) {
+      // Step A: Check if the ordered product item belongs to a specific dealer assigned to this college
+      let productDealerId = items[0]?.dealerId;
+      if (!productDealerId) {
+        const firstItem = (db.stationeryItems || []).find(it => it.id === items[0]?.id);
+        if (firstItem?.dealerId) productDealerId = firstItem.dealerId;
+      }
+
+      if (productDealerId) {
+        const prodDealer = allUsers.find(u =>
+          u.id === productDealerId &&
+          (u.role === 'dealer' || u.role === 'stationery_dealer') &&
+          (u.collegeId === finalCollegeId || (Array.isArray(u.collegeIds) && u.collegeIds.includes(finalCollegeId)))
+        );
+        if (prodDealer) {
+          designatedDealer = prodDealer;
+        }
+      }
+
+      // Step B: Dedicated stationery dealer assigned to this college
+      if (!designatedDealer) {
+        const dedicatedStationeryDealers = allUsers.filter(u =>
+          (u.role === 'stationery_dealer' || u.dealerType === 'stationery') &&
+          (u.collegeId === finalCollegeId || (Array.isArray(u.collegeIds) && u.collegeIds.includes(finalCollegeId)))
+        );
+
+        if (dedicatedStationeryDealers.length === 1) {
+          designatedDealer = dedicatedStationeryDealers[0];
+        } else if (dedicatedStationeryDealers.length === 0) {
+          // Step C: Single general dealer assigned to this college (if not explicitly print-only)
+          const generalDealers = allUsers.filter(u =>
+            u.role === 'dealer' &&
+            u.dealerType !== 'print' &&
+            (u.collegeId === finalCollegeId || (Array.isArray(u.collegeIds) && u.collegeIds.includes(finalCollegeId)))
+          );
+
+          if (generalDealers.length === 1) {
+            designatedDealer = generalDealers[0];
+          }
+          // If 0 or > 1 (ambiguous): remains null, never guess.
+        }
+        // If dedicatedStationeryDealers.length > 1 (ambiguous): remains null, never guess.
+      }
+    }
+
     const newOrder = {
       id: orderId,
       orderType: 'STATIONERY',
@@ -284,11 +374,17 @@ export const createStationeryOrder = async (req, res) => {
       customerPhone: user.phone,
       customerEmail: user.email || '',
       deliveryPin: user.deliveryPin || '',
-      collegeId: user.collegeId || '',
-      collegeName: collegeName || user.collegeName || 'Campus Hub',
+      collegeId: finalCollegeId,
+      collegeName: finalCollegeName,
       yearOfStudy: yearOfStudy || 'Student',
       branch: branch || 'General',
       deliveryLocation: deliveryLocation || user.roomDetails || 'Campus Hostel',
+      dealerId: designatedDealer ? designatedDealer.id : null,
+      dealerName: designatedDealer ? designatedDealer.name : 'Pending Assignment',
+      dealerPhone: designatedDealer ? designatedDealer.phone : '',
+      distributorId: designatedDistributor ? designatedDistributor.id : null,
+      distributorName: designatedDistributor ? designatedDistributor.name : 'Campus Distributor',
+      distributorPhone: designatedDistributor ? designatedDistributor.phone : '',
       items,
       totalAmount,
       pricing: { finalPrice: totalAmount },
@@ -306,7 +402,7 @@ export const createStationeryOrder = async (req, res) => {
     };
 
     db.stationeryOrders.unshift(newOrder);
-    db.orders.unshift(newOrder); // Also present in general orders feed
+    db.orders.unshift(newOrder); // Also present in general orders feed for customer dashboard & tracking
 
     if (isUsingMongo()) {
       try {
@@ -334,21 +430,46 @@ export const createStationeryOrder = async (req, res) => {
 
 /**
  * GET /api/stationery/dealer/orders
- * Dealer gets stationery orders assigned to their store.
+ * Dealer gets stationery orders assigned to their store or unassigned in their assigned colleges.
+ * Restricted strictly to the authenticated dealer; unrelated dealers cannot access orders from other colleges.
  */
 export const getDealerStationeryOrders = async (req, res) => {
   try {
+    const user = req.user;
+    const isSuperUser = ['admin', 'super_admin'].includes(user?.role);
+    const userCollegeIds = Array.isArray(user?.collegeIds) && user.collegeIds.length > 0
+      ? user.collegeIds
+      : (user?.collegeId ? [user.collegeId] : []);
+
     let orders = [];
 
     if (isUsingMongo()) {
       try {
         const col = getMongoCollection('stationery_orders');
-        orders = await col.find({}).sort({ createdAt: -1 }).toArray();
+        // Admin sees all. Dealer sees orders explicitly assigned to them OR unassigned orders for their colleges.
+        const query = isSuperUser
+          ? {}
+          : {
+              $or: [
+                { dealerId: user.id },
+                { collegeId: { $in: userCollegeIds }, dealerId: null }
+              ]
+            };
+        orders = await col.find(query).sort({ createdAt: -1 }).toArray();
       } catch (_) {}
     }
 
     if (!orders || orders.length === 0) {
-      orders = db.stationeryOrders || db.orders.filter(o => o.orderType === 'STATIONERY');
+      const source = (db.stationeryOrders && db.stationeryOrders.length > 0)
+        ? db.stationeryOrders
+        : db.orders.filter(o => o.orderType === 'STATIONERY');
+
+      orders = source.filter(o => {
+        if (isSuperUser) return true;
+        // Dealer sees orders assigned to them, OR unassigned stationery orders for their assigned colleges
+        return o.dealerId === user.id ||
+               (!o.dealerId && userCollegeIds.includes(o.collegeId));
+      });
     }
 
     return res.json({ success: true, orders });
@@ -359,12 +480,14 @@ export const getDealerStationeryOrders = async (req, res) => {
 
 /**
  * PUT /api/stationery/dealer/orders/:id/status
- * Dealer updates stationery order status (e.g., PENDING -> DISPATCHED -> DELIVERED).
+ * Dealer updates stationery order status (e.g., PENDING -> OUT_FOR_DELIVERY -> DELIVERED).
+ * Enforces handler-level authorization. Unrelated dealers cannot update.
  */
 export const updateStationeryOrderStatus = async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
+    const user = req.user;
 
     let order = db.stationeryOrders.find(o => o.id === id) || db.orders.find(o => o.id === id);
 
@@ -380,12 +503,35 @@ export const updateStationeryOrderStatus = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
 
+    // Handler-level authorization check: Only admin, assigned dealer, or college dealer for unassigned order
+    const isSuperUser = ['admin', 'super_admin'].includes(user?.role);
+    const userCollegeIds = Array.isArray(user?.collegeIds) && user.collegeIds.length > 0
+      ? user.collegeIds
+      : (user?.collegeId ? [user.collegeId] : []);
+
+    const isAuthorizedDealer = order.dealerId === user.id ||
+      (!order.dealerId && userCollegeIds.includes(order.collegeId));
+
+    if (!isSuperUser && !isAuthorizedDealer) {
+      return res.status(403).json({
+        success: false,
+        message: 'Unauthorized: You are not the designated dealer for this stationery order.'
+      });
+    }
+
+    // If order was unassigned, claim it for this authorized dealer
+    if (!order.dealerId) {
+      order.dealerId = user.id;
+      order.dealerName = user.name;
+      order.dealerPhone = user.phone || '';
+    }
+
     order.orderStatus = status;
     order.timeline = order.timeline || [];
     order.timeline.push({
       status,
       time: new Date().toISOString(),
-      note: `Status updated to ${status} by Stationery Dealer`
+      note: `Status updated to ${status} by Stationery Dealer ${user.name}`
     });
 
     if (status === 'DELIVERED') {
@@ -393,13 +539,26 @@ export const updateStationeryOrderStatus = async (req, res) => {
       order.deliveredAt = new Date().toISOString();
     }
 
+    // Synchronize both in-memory arrays
+    const statIdx = db.stationeryOrders.findIndex(o => o.id === id);
+    if (statIdx !== -1) {
+      db.stationeryOrders[statIdx] = { ...db.stationeryOrders[statIdx], ...order };
+    }
+    const ordIdx = db.orders.findIndex(o => o.id === id);
+    if (ordIdx !== -1) {
+      db.orders[ordIdx] = { ...db.orders[ordIdx], ...order };
+    }
+
+    // Synchronize both MongoDB collections
     if (isUsingMongo()) {
       try {
         const col = getMongoCollection('stationery_orders');
         const ordCol = getMongoCollection('orders');
         await col.updateOne({ id }, { $set: order });
         await ordCol.updateOne({ id }, { $set: order });
-      } catch (_) {}
+      } catch (e) {
+        console.error('Mongo order update error:', e.message);
+      }
     }
 
     syncDbToR2();
