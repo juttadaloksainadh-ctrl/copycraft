@@ -2,7 +2,6 @@ import express from 'express';
 import crypto from 'crypto';
 import { authenticateToken } from '../middleware/authMiddleware.js';
 import { generateToken, verifyToken } from '../config/jwt.js';
-import { extractFileMetadata } from '../services/pdfService.js';
 import { analyzeDocumentAI } from '../services/aiService.js';
 import {
   isR2Configured,
@@ -12,7 +11,6 @@ import {
   fileExists,
   getUploadPresignedUrl,
   getObjectMetadata,
-  getObjectBuffer,
   generateUploadKey,
   getR2Url
 } from '../services/r2Storage.js';
@@ -173,8 +171,9 @@ export const presignUploadHandler = async (req, res) => {
  * Verify completed direct uploads to R2:
  * 1. Validates user-file binding to prevent object key forgery
  * 2. Verifies actual file size in R2 against 50MB limit
- * 3. Extracts verified PDF page count and runs AI analysis
- * 4. Returns canonical file objects compatible with order creation
+ * 3. Accepts frontend-extracted PDF page count (PDF.js) with size-based plausibility check
+ * 4. Runs AI analysis
+ * 5. Returns canonical file objects compatible with order creation
  */
 export const verifyUploadHandler = async (req, res) => {
   try {
@@ -286,24 +285,36 @@ export const verifyUploadHandler = async (req, res) => {
         });
       }
 
-      // Process file metadata & page count
+      // Process page count — accept frontend-supplied pageCount (PDF.js extracted)
       const ext = rawName.split('.').pop().toLowerCase();
       const mimeType = file.mimeType || objectMeta.contentType || 'application/octet-stream';
       let pageCount = 1;
+      const clientPageCount = Number(file.pageCount);
 
       if (ext === 'pdf') {
-        try {
-          const fileBuffer = await getObjectBuffer(r2Key);
-          const metaResult = await extractFileMetadata(fileBuffer, rawName, mimeType);
-          pageCount = metaResult.pageCount || 1;
-        } catch (pdfErr) {
-          console.warn(`PDF parsing fallback for ${rawName}:`, pdfErr.message);
-          const metaResult = await extractFileMetadata(null, rawName, mimeType);
-          pageCount = metaResult.pageCount || 1;
+        // Validate: must be a positive integer, capped at a sane maximum
+        if (!Number.isInteger(clientPageCount) || clientPageCount < 1 || clientPageCount > 10000) {
+          return res.status(400).json({
+            success: false,
+            message: `Invalid page count (${file.pageCount}) for "${rawName}". PDF page count must be between 1 and 10,000.`
+          });
         }
+
+        // Security heuristic: a single PDF page is rarely < 200 bytes
+        const maxReasonablePages = Math.floor(actualSize / 200);
+        if (clientPageCount > maxReasonablePages) {
+          return res.status(400).json({
+            success: false,
+            message: `Claimed page count (${clientPageCount}) is implausible for file size (${actualSize} bytes) of "${rawName}".`
+          });
+        }
+
+        pageCount = clientPageCount;
+      } else if (['jpg', 'jpeg', 'png', 'webp'].includes(ext)) {
+        pageCount = 1;
       } else {
-        const metaResult = await extractFileMetadata(null, rawName, mimeType);
-        pageCount = metaResult.pageCount || 1;
+        // DOCX, PPTX — use client-provided count if valid, else default to 1
+        pageCount = (Number.isInteger(clientPageCount) && clientPageCount >= 1) ? clientPageCount : 1;
       }
 
       // AI Document Intelligence Analysis

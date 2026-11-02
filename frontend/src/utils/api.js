@@ -201,9 +201,10 @@ export async function uploadToR2(uploadUrl, file, headers = {}, onProgress = nul
 
 /**
  * Verify completed direct uploads with the backend.
- * The backend verifies the object in R2, extracts server-verified page count and runs AI analysis.
+ * The backend verifies the object in R2 via HeadObjectCommand, accepts the
+ * frontend-extracted page count (PDF.js), and runs AI analysis.
  *
- * @param {Array<{fileId: string, fileName: string, r2Key: string, uploadToken?: string, mimeType?: string}>} files
+ * @param {Array<{fileId: string, fileName: string, r2Key: string, uploadToken?: string, mimeType?: string, pageCount?: number}>} files
  * @returns {Promise<{success: boolean, files?: Array, message?: string}>}
  */
 export async function verifyDirectUpload(files) {
@@ -213,7 +214,8 @@ export async function verifyDirectUpload(files) {
       fileName: f.fileName || f.name,
       r2Key: f.r2Key,
       uploadToken: f.uploadToken,
-      mimeType: f.mimeType || f.type
+      mimeType: f.mimeType || f.type,
+      pageCount: f.pageCount
     }))
   };
   return apiFetch('/files/verify-upload', {

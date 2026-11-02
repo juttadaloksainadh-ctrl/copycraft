@@ -8,6 +8,7 @@ import {
   verifyDirectUpload,
   uploadFilesMultipart
 } from '../../utils/api';
+import { countPdfPages } from '../../utils/pdfPageCounter';
 
 // Comprehensive MIME types + extensions ensuring mobile Android/iOS file pickers allow document selection
 const ACCEPTED_FILE_TYPES = [
@@ -96,7 +97,7 @@ export default function FileUploader({ onFilesUpdated, files = [] }) {
     }
 
     setIsUploading(true);
-    setUploadProgress(10);
+    setUploadProgress(5);
     setUploadStatusText('Requesting secure cloud storage authorization...');
 
     try {
@@ -143,15 +144,41 @@ export default function FileUploader({ onFilesUpdated, files = [] }) {
         return;
       }
 
-      // Step 2: Upload each file directly to Cloudflare R2
+      // Step 2: Count PDF pages locally using PDF.js (BEFORE uploading to R2)
+      setUploadProgress(12);
+      setUploadStatusText('Counting document pages locally...');
+
+      const pageCounts = [];
+      for (let idx = 0; idx < uploadedFiles.length; idx++) {
+        const file = uploadedFiles[idx];
+        const ext = file.name.split('.').pop().toLowerCase();
+
+        if (ext === 'pdf') {
+          try {
+            const result = await countPdfPages(file);
+            pageCounts.push(result.pageCount);
+          } catch (pdfErr) {
+            // Page counting failed — block upload for this batch
+            addToast(pdfErr.message || `Failed to read "${file.name}". Please check the file.`, 'error');
+            return;
+          }
+        } else if (['jpg', 'jpeg', 'png', 'webp'].includes(ext)) {
+          pageCounts.push(1);
+        } else {
+          // DOCX, PPTX, DOC, PPT — honest default
+          pageCounts.push(1);
+        }
+      }
+
+      // Step 3: Upload each file directly to Cloudflare R2
       const totalFiles = uploadedFiles.length;
       const fileProgresses = new Array(totalFiles).fill(0);
 
       const updateAggregateProgress = () => {
         const sum = fileProgresses.reduce((a, b) => a + b, 0);
         const avg = sum / totalFiles;
-        // Progress scale: 15% (after presign) to 80% (all files uploaded to R2)
-        const mapped = Math.round(15 + (avg * 0.65));
+        // Progress scale: 20% (after page counting) to 80% (all files uploaded to R2)
+        const mapped = Math.round(20 + (avg * 0.60));
         setUploadProgress(mapped);
       };
 
@@ -173,16 +200,17 @@ export default function FileUploader({ onFilesUpdated, files = [] }) {
         })
       );
 
-      // Step 3: Backend verification
+      // Step 4: Backend verification — send page counts along with file descriptors
       setUploadProgress(85);
-      setUploadStatusText('Verifying files and calculating exact page counts with AI...');
+      setUploadStatusText('Verifying uploaded files on server...');
 
-      const verifyDescriptors = presignedList.map(item => ({
+      const verifyDescriptors = presignedList.map((item, idx) => ({
         fileId: item.fileId,
         fileName: item.fileName,
         r2Key: item.r2Key,
         uploadToken: item.uploadToken,
-        mimeType: item.mimeType
+        mimeType: item.mimeType,
+        pageCount: pageCounts[idx]
       }));
 
       const verifyRes = await verifyDirectUpload(verifyDescriptors);
@@ -326,7 +354,7 @@ export default function FileUploader({ onFilesUpdated, files = [] }) {
             />
           </div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-            Direct-to-cloud secure transfer • Server-verified page count & AI analysis
+            Direct-to-cloud secure transfer • PDF.js local page counting • Server verified
           </div>
         </div>
       )}
@@ -431,4 +459,3 @@ export default function FileUploader({ onFilesUpdated, files = [] }) {
     </div>
   );
 }
-

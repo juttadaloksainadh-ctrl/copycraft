@@ -19,8 +19,10 @@
  *     - Oversized uploaded object enforcement & auto-purge (> 50MB -> 400)
  *     - Zero-byte / empty file rejection (400)
  *     - S3 metadata mismatch rejection (403)
+ *     - Invalid pageCount rejection (400)
+ *     - Implausible pageCount rejection (> actualSize / 200) (400)
  *  4. Document Analysis & AI Pipeline Preservation
- *     - PDF page-count extraction via pdf-parse
+ *     - Client page-count verification and size plausibility
  *     - AI analysis preservation (blank pages, ink, duplex recommendations)
  *  5. Downstream Order Creation & Dealer Download Compatibility
  *     - Verifies files array feeds directly into order creation and pricing
@@ -255,7 +257,8 @@ async function testVerificationSecurity() {
         {
           fileId: 'file_123',
           fileName: 'victim_notes.pdf',
-          r2Key: forgedKey
+          r2Key: forgedKey,
+          pageCount: 1
         }
       ]
     });
@@ -275,7 +278,8 @@ async function testVerificationSecurity() {
         {
           fileId: 'file_999',
           fileName: 'app_database.json',
-          r2Key: traversalKey
+          r2Key: traversalKey,
+          pageCount: 1
         }
       ]
     });
@@ -302,7 +306,8 @@ async function testVerificationSecurity() {
           fileId: 'file_777',
           fileName: 'notes.pdf',
           r2Key: validKey,
-          uploadToken: fakeToken
+          uploadToken: fakeToken,
+          pageCount: 1
         }
       ]
     });
@@ -330,7 +335,8 @@ async function testVerificationSecurity() {
         {
           fileId: 'file_888',
           fileName: 'missing.pdf',
-          r2Key: validKey
+          r2Key: validKey,
+          pageCount: 1
         }
       ]
     });
@@ -367,7 +373,8 @@ async function testVerificationSecurity() {
         {
           fileId: 'file_oversized',
           fileName: 'big.pdf',
-          r2Key: oversizedKey
+          r2Key: oversizedKey,
+          pageCount: 10
         }
       ]
     });
@@ -398,7 +405,8 @@ async function testVerificationSecurity() {
         {
           fileId: 'file_empty',
           fileName: 'zero.pdf',
-          r2Key: emptyKey
+          r2Key: emptyKey,
+          pageCount: 1
         }
       ]
     });
@@ -407,6 +415,62 @@ async function testVerificationSecurity() {
     assert(
       res.getStatusCode() === 400 && res.getData()?.message?.includes('is empty (0 bytes)'),
       'Rejects 0-byte empty file upload'
+    );
+  }
+
+  // 3.7 Invalid pageCount format (negative, zero, or non-integer)
+  {
+    const testKey = `orders/uploads/${testUser.id}/file_inv_doc.pdf`;
+    const mockS3 = createMockS3(async () => ({
+      ContentLength: 2048,
+      ContentType: 'application/pdf',
+      Metadata: { uploadedby: testUser.id, fileid: 'file_inv' }
+    }));
+    setR2ClientForTesting(mockS3);
+
+    const { req, res } = createMockHttp(testUser, {
+      files: [
+        {
+          fileId: 'file_inv',
+          fileName: 'doc.pdf',
+          r2Key: testKey,
+          pageCount: 0 // invalid: must be >= 1
+        }
+      ]
+    });
+
+    await verifyUploadHandler(req, res);
+    assert(
+      res.getStatusCode() === 400 && res.getData()?.message?.includes('Invalid page count'),
+      'Rejects invalid page count (<= 0)'
+    );
+  }
+
+  // 3.8 Implausible pageCount vs actual file size (e.g. 500 pages for 2000 bytes)
+  {
+    const testKey = `orders/uploads/${testUser.id}/file_imp_implausible.pdf`;
+    const mockS3 = createMockS3(async () => ({
+      ContentLength: 500, // 500 bytes -> max reasonable pages is 2
+      ContentType: 'application/pdf',
+      Metadata: { uploadedby: testUser.id, fileid: 'file_imp' }
+    }));
+    setR2ClientForTesting(mockS3);
+
+    const { req, res } = createMockHttp(testUser, {
+      files: [
+        {
+          fileId: 'file_imp',
+          fileName: 'implausible.pdf',
+          r2Key: testKey,
+          pageCount: 50 // 50 pages for 500 bytes is implausible
+        }
+      ]
+    });
+
+    await verifyUploadHandler(req, res);
+    assert(
+      res.getStatusCode() === 400 && res.getData()?.message?.includes('implausible'),
+      'Rejects implausible page count (> actualSize / 200)'
     );
   }
 }
@@ -419,7 +483,7 @@ async function testSuccessfulVerification() {
 
   const validKey = `orders/uploads/${testUser.id}/file_test_report.pdf`;
 
-  // Minimal valid PDF binary header
+  // Minimal valid PDF binary header (approx 240 bytes)
   const samplePdfBuffer = Buffer.from(
     '%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n' +
     '2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n' +
@@ -439,13 +503,6 @@ async function testSuccessfulVerification() {
         }
       };
     }
-    if (command.constructor.name === 'GetObjectCommand') {
-      return {
-        Body: {
-          transformToByteArray: async () => new Uint8Array(samplePdfBuffer)
-        }
-      };
-    }
     return {};
   });
   setR2ClientForTesting(mockValidS3);
@@ -455,7 +512,8 @@ async function testSuccessfulVerification() {
       {
         fileId: 'file_test',
         fileName: 'report.pdf',
-        r2Key: validKey
+        r2Key: validKey,
+        pageCount: 1
       }
     ]
   });
@@ -475,8 +533,8 @@ async function testSuccessfulVerification() {
   );
 
   assert(
-    processed && processed.pageCount >= 1,
-    `Calculates verified pageCount from PDF stream: ${processed?.pageCount}`
+    processed && processed.pageCount === 1,
+    `Preserves verified client pageCount: ${processed?.pageCount}`
   );
 
   assert(

@@ -13,12 +13,12 @@ export async function extractFileMetadata(fileBuffer, originalName, mimeType) {
           pageCount = data.numpages;
         }
       } catch (e) {
-        // Fallback for mock/test pdf buffers
-        pageCount = Math.floor(Math.random() * 8) + 3;
+        // Parse failed — use honest minimum instead of random
+        pageCount = 1;
       }
     } else if (['doc', 'docx', 'ppt', 'pptx'].includes(ext)) {
-      // General heuristics for docx/pptx presentation files
-      pageCount = Math.floor(Math.random() * 12) + 2;
+      // Non-PDF document types — honest default (no random fabrication)
+      pageCount = 1;
     } else if (['jpg', 'jpeg', 'png'].includes(ext)) {
       pageCount = 1;
     } else {
@@ -38,7 +38,7 @@ export async function extractFileMetadata(fileBuffer, originalName, mimeType) {
       fileSize: 1024 * 500,
       mimeType,
       extension: 'pdf',
-      pageCount: 5
+      pageCount: 1
     };
   }
 }
