@@ -11,20 +11,29 @@
  *     - R2 unconfigured fallback response
  *  2. Presigned URL Generation (with mock S3 client)
  *     - Server-controlled fileId and user-bound r2Key generation
- *     - Cryptographic uploadToken issuance
+ *     - Cryptographic uploadToken issuance with 5 identity fields
  *  3. Verification & Tamper Resistance
  *     - Forged object key rejection (403)
- *     - Tampered / mismatched uploadToken rejection (403)
+ *     - Path traversal in key rejection (400)
+ *     - Missing uploadToken rejection (400)
+ *     - Expired uploadToken rejection (403)
+ *     - Wrong userId in uploadToken rejection (403)
+ *     - Wrong fileId in uploadToken rejection (403)
+ *     - Wrong r2Key in uploadToken rejection (403)
+ *     - Wrong fileName in uploadToken rejection (403)
+ *     - Wrong mimeType in uploadToken rejection (403)
  *     - Missing / 404 object in R2 handling
  *     - Oversized uploaded object enforcement & auto-purge (> 50MB -> 400)
  *     - Zero-byte / empty file rejection (400)
  *     - S3 metadata mismatch rejection (403)
  *     - Invalid pageCount rejection (400)
  *     - Implausible pageCount rejection (> actualSize / 200) (400)
- *  4. Document Analysis & AI Pipeline Preservation
- *     - Client page-count verification and size plausibility
+ *  4. Metadata Verification & AI Analysis Pipeline
+ *     - Client page-count acceptance and server-side verified record storage
  *     - AI analysis preservation (blank pages, ink, duplex recommendations)
- *  5. Downstream Order Creation & Dealer Download Compatibility
+ *  5. Downstream Order Creation & Payment Verification
+ *     - Enforces server-stored pageCount (client cannot tamper with pageCount)
+ *     - Unverified file upload rejection during order creation (400)
  *     - Verifies files array feeds directly into order creation and pricing
  *  6. Safe File Cleanup
  *     - Verifies order purge deletes actual r2Keys stored on the order
@@ -43,6 +52,7 @@ import {
 } from './services/r2Storage.js';
 import { presignUploadHandler, verifyUploadHandler } from './routes/fileRoutes.js';
 import { createOrderRecord } from './controllers/orderController.js';
+import { getVerifiedUpload } from './models/verifiedUpload.js';
 import { runDeliveredFileCleanup, runTemporaryUploadCleanup } from './services/fileCleanupService.js';
 
 const PASS = '\x1b[32m✅ PASS\x1b[0m';
@@ -249,6 +259,18 @@ async function testPresignedUrlGeneration() {
 async function testVerificationSecurity() {
   console.log('\n\x1b[1m── 3. Verification & Anti-Forgery Guarantees ──\x1b[0m');
 
+  // Helper to generate a valid matching token
+  const makeToken = (overrides = {}) => {
+    return generateToken({
+      userId: testUser.id,
+      fileId: 'file_default',
+      r2Key: `orders/uploads/${testUser.id}/file_default_notes.pdf`,
+      fileName: 'notes.pdf',
+      mimeType: 'application/pdf',
+      ...overrides
+    });
+  };
+
   // 3.1 Forged Key Attempt (attacker tries to verify another user's key)
   {
     const forgedKey = `orders/uploads/usr_victim_999/file_123_victim_notes.pdf`;
@@ -258,6 +280,7 @@ async function testVerificationSecurity() {
           fileId: 'file_123',
           fileName: 'victim_notes.pdf',
           r2Key: forgedKey,
+          uploadToken: makeToken({ fileId: 'file_123', r2Key: forgedKey, fileName: 'victim_notes.pdf' }),
           pageCount: 1
         }
       ]
@@ -279,6 +302,7 @@ async function testVerificationSecurity() {
           fileId: 'file_999',
           fileName: 'app_database.json',
           r2Key: traversalKey,
+          uploadToken: makeToken({ fileId: 'file_999', r2Key: traversalKey }),
           pageCount: 1
         }
       ]
@@ -291,22 +315,47 @@ async function testVerificationSecurity() {
     );
   }
 
-  // 3.3 Forged / Tampered uploadToken
+  // 3.3 Mandatory uploadToken - Missing Token rejection
   {
     const validKey = `orders/uploads/${testUser.id}/file_777_notes.pdf`;
-    const fakeToken = generateToken({
-      userId: 'other_user',
-      fileId: 'file_777',
-      r2Key: validKey
-    });
-
     const { req, res } = createMockHttp(testUser, {
       files: [
         {
           fileId: 'file_777',
           fileName: 'notes.pdf',
           r2Key: validKey,
-          uploadToken: fakeToken,
+          pageCount: 1
+          // uploadToken omitted
+        }
+      ]
+    });
+
+    await verifyUploadHandler(req, res);
+    assert(
+      res.getStatusCode() === 400 && res.getData()?.message?.includes('Upload token is required'),
+      'MANDATORY TOKEN: Rejects verification request when uploadToken is missing (400)'
+    );
+  }
+
+  // 3.4 Expired uploadToken rejection
+  {
+    const validKey = `orders/uploads/${testUser.id}/file_exp_notes.pdf`;
+    // Create an already-expired token (-10 seconds)
+    const expiredToken = generateToken({
+      userId: testUser.id,
+      fileId: 'file_exp',
+      r2Key: validKey,
+      fileName: 'notes.pdf',
+      mimeType: 'application/pdf'
+    }, '-10s');
+
+    const { req, res } = createMockHttp(testUser, {
+      files: [
+        {
+          fileId: 'file_exp',
+          fileName: 'notes.pdf',
+          r2Key: validKey,
+          uploadToken: expiredToken,
           pageCount: 1
         }
       ]
@@ -315,13 +364,69 @@ async function testVerificationSecurity() {
     await verifyUploadHandler(req, res);
     assert(
       res.getStatusCode() === 403 && res.getData()?.message?.includes('Upload token validation failed'),
-      'Rejects mismatched or forged uploadToken'
+      'MANDATORY TOKEN: Rejects expired uploadToken (403)'
     );
   }
 
-  // 3.4 Object Missing from R2 (404)
+  // 3.5 Token Mismatches: userId, fileId, r2Key, fileName, mimeType
+  {
+    const validKey = `orders/uploads/${testUser.id}/file_mismatch_notes.pdf`;
+
+    // Wrong userId
+    {
+      const token = makeToken({ userId: 'other_user', fileId: 'file_mismatch', r2Key: validKey, fileName: 'notes.pdf' });
+      const { req, res } = createMockHttp(testUser, {
+        files: [{ fileId: 'file_mismatch', fileName: 'notes.pdf', r2Key: validKey, uploadToken: token, pageCount: 1 }]
+      });
+      await verifyUploadHandler(req, res);
+      assert(res.getStatusCode() === 403, 'Rejects token with mismatched userId');
+    }
+
+    // Wrong fileId
+    {
+      const token = makeToken({ fileId: 'wrong_file_id', r2Key: validKey, fileName: 'notes.pdf' });
+      const { req, res } = createMockHttp(testUser, {
+        files: [{ fileId: 'file_mismatch', fileName: 'notes.pdf', r2Key: validKey, uploadToken: token, pageCount: 1 }]
+      });
+      await verifyUploadHandler(req, res);
+      assert(res.getStatusCode() === 403, 'Rejects token with mismatched fileId');
+    }
+
+    // Wrong r2Key
+    {
+      const token = makeToken({ fileId: 'file_mismatch', r2Key: `orders/uploads/${testUser.id}/file_other_key.pdf`, fileName: 'notes.pdf' });
+      const { req, res } = createMockHttp(testUser, {
+        files: [{ fileId: 'file_mismatch', fileName: 'notes.pdf', r2Key: validKey, uploadToken: token, pageCount: 1 }]
+      });
+      await verifyUploadHandler(req, res);
+      assert(res.getStatusCode() === 403, 'Rejects token with mismatched r2Key');
+    }
+
+    // Wrong fileName
+    {
+      const token = makeToken({ fileId: 'file_mismatch', r2Key: validKey, fileName: 'different.pdf' });
+      const { req, res } = createMockHttp(testUser, {
+        files: [{ fileId: 'file_mismatch', fileName: 'notes.pdf', r2Key: validKey, uploadToken: token, pageCount: 1 }]
+      });
+      await verifyUploadHandler(req, res);
+      assert(res.getStatusCode() === 403, 'Rejects token with mismatched fileName');
+    }
+
+    // Wrong mimeType
+    {
+      const token = makeToken({ fileId: 'file_mismatch', r2Key: validKey, fileName: 'notes.pdf', mimeType: 'image/png' });
+      const { req, res } = createMockHttp(testUser, {
+        files: [{ fileId: 'file_mismatch', fileName: 'notes.pdf', r2Key: validKey, mimeType: 'application/pdf', uploadToken: token, pageCount: 1 }]
+      });
+      await verifyUploadHandler(req, res);
+      assert(res.getStatusCode() === 403, 'Rejects token with mismatched mimeType');
+    }
+  }
+
+  // 3.6 Object Missing from R2 (404)
   {
     const validKey = `orders/uploads/${testUser.id}/file_888_missing.pdf`;
+    const token = makeToken({ fileId: 'file_888', r2Key: validKey, fileName: 'missing.pdf' });
     const mockNotFoundS3 = createMockS3(async () => {
       const notFoundErr = new Error('NoSuchKey');
       notFoundErr.name = 'NoSuchKey';
@@ -336,6 +441,7 @@ async function testVerificationSecurity() {
           fileId: 'file_888',
           fileName: 'missing.pdf',
           r2Key: validKey,
+          uploadToken: token,
           pageCount: 1
         }
       ]
@@ -348,10 +454,11 @@ async function testVerificationSecurity() {
     );
   }
 
-  // 3.5 Actual file size exceeds 50MB in R2
+  // 3.7 Actual file size exceeds 50MB in R2
   {
     let deletedKey = null;
     const oversizedKey = `orders/uploads/${testUser.id}/file_oversized_big.pdf`;
+    const token = makeToken({ fileId: 'file_oversized', r2Key: oversizedKey, fileName: 'big.pdf' });
     const mockOversizedS3 = createMockS3(async (command) => {
       if (command.constructor.name === 'HeadObjectCommand') {
         return {
@@ -374,6 +481,7 @@ async function testVerificationSecurity() {
           fileId: 'file_oversized',
           fileName: 'big.pdf',
           r2Key: oversizedKey,
+          uploadToken: token,
           pageCount: 10
         }
       ]
@@ -390,9 +498,10 @@ async function testVerificationSecurity() {
     );
   }
 
-  // 3.6 Empty file (0 bytes) in R2
+  // 3.8 Empty file (0 bytes) in R2
   {
     const emptyKey = `orders/uploads/${testUser.id}/file_empty_zero.pdf`;
+    const token = makeToken({ fileId: 'file_empty', r2Key: emptyKey, fileName: 'zero.pdf' });
     const mockEmptyS3 = createMockS3(async () => ({
       ContentLength: 0,
       ContentType: 'application/pdf',
@@ -406,6 +515,7 @@ async function testVerificationSecurity() {
           fileId: 'file_empty',
           fileName: 'zero.pdf',
           r2Key: emptyKey,
+          uploadToken: token,
           pageCount: 1
         }
       ]
@@ -418,9 +528,10 @@ async function testVerificationSecurity() {
     );
   }
 
-  // 3.7 Invalid pageCount format (negative, zero, or non-integer)
+  // 3.9 Invalid pageCount format (negative, zero, or non-integer)
   {
     const testKey = `orders/uploads/${testUser.id}/file_inv_doc.pdf`;
+    const token = makeToken({ fileId: 'file_inv', r2Key: testKey, fileName: 'doc.pdf' });
     const mockS3 = createMockS3(async () => ({
       ContentLength: 2048,
       ContentType: 'application/pdf',
@@ -434,6 +545,7 @@ async function testVerificationSecurity() {
           fileId: 'file_inv',
           fileName: 'doc.pdf',
           r2Key: testKey,
+          uploadToken: token,
           pageCount: 0 // invalid: must be >= 1
         }
       ]
@@ -446,9 +558,10 @@ async function testVerificationSecurity() {
     );
   }
 
-  // 3.8 Implausible pageCount vs actual file size (e.g. 500 pages for 2000 bytes)
+  // 3.10 Implausible pageCount vs actual file size (e.g. 50 pages for 500 bytes)
   {
     const testKey = `orders/uploads/${testUser.id}/file_imp_implausible.pdf`;
+    const token = makeToken({ fileId: 'file_imp', r2Key: testKey, fileName: 'implausible.pdf' });
     const mockS3 = createMockS3(async () => ({
       ContentLength: 500, // 500 bytes -> max reasonable pages is 2
       ContentType: 'application/pdf',
@@ -462,6 +575,7 @@ async function testVerificationSecurity() {
           fileId: 'file_imp',
           fileName: 'implausible.pdf',
           r2Key: testKey,
+          uploadToken: token,
           pageCount: 50 // 50 pages for 500 bytes is implausible
         }
       ]
@@ -476,12 +590,19 @@ async function testVerificationSecurity() {
 }
 
 // ─────────────────────────────────────────────────────────────
-// SUITE 4: Successful Verification & AI Analysis Preservation
+// SUITE 4: Successful Verification & Server-Side Page-Count Storage
 // ─────────────────────────────────────────────────────────────
 async function testSuccessfulVerification() {
-  console.log('\n\x1b[1m── 4. Metadata Verification & AI Analysis Pipeline ──\x1b[0m');
+  console.log('\n\x1b[1m── 4. Metadata Verification & Server-Side Storage ──\x1b[0m');
 
   const validKey = `orders/uploads/${testUser.id}/file_test_report.pdf`;
+  const token = generateToken({
+    userId: testUser.id,
+    fileId: 'file_test',
+    r2Key: validKey,
+    fileName: 'report.pdf',
+    mimeType: 'application/pdf'
+  });
 
   // Minimal valid PDF binary header (approx 240 bytes)
   const samplePdfBuffer = Buffer.from(
@@ -492,16 +613,21 @@ async function testSuccessfulVerification() {
     'trailer\n<< /Size 4 /Root 1 0 R >>\nstartxref\n168\n%%EOF'
   );
 
+  let getObjectCalled = false;
   const mockValidS3 = createMockS3(async (command) => {
     if (command.constructor.name === 'HeadObjectCommand') {
       return {
-        ContentLength: samplePdfBuffer.length,
+        ContentLength: 4096,
         ContentType: 'application/pdf',
         Metadata: {
           uploadedby: testUser.id,
           fileid: 'file_test'
         }
       };
+    }
+    if (command.constructor.name === 'GetObjectCommand') {
+      getObjectCalled = true;
+      throw new Error('Backend MUST NOT download PDF from R2 for verification!');
     }
     return {};
   });
@@ -513,7 +639,9 @@ async function testSuccessfulVerification() {
         fileId: 'file_test',
         fileName: 'report.pdf',
         r2Key: validKey,
-        pageCount: 1
+        uploadToken: token,
+        mimeType: 'application/pdf',
+        pageCount: 15 // verified count from client PDF.js
       }
     ]
   });
@@ -526,6 +654,11 @@ async function testSuccessfulVerification() {
     'Verifies valid upload successfully'
   );
 
+  assert(
+    getObjectCalled === false,
+    'ARCHITECTURAL GUARANTEE: Backend NEVER calls GetObjectCommand / downloads PDF for page counting'
+  );
+
   const processed = data?.files?.[0];
   assert(
     processed && processed.id === 'file_test' && processed.r2Key === validKey,
@@ -533,8 +666,15 @@ async function testSuccessfulVerification() {
   );
 
   assert(
-    processed && processed.pageCount === 1,
-    `Preserves verified client pageCount: ${processed?.pageCount}`
+    processed && processed.pageCount === 15,
+    `Preserves client pageCount: ${processed?.pageCount}`
+  );
+
+  // Verify that the record was persistently stored server-side
+  const storedRecord = await getVerifiedUpload(testUser.id, 'file_test', validKey);
+  assert(
+    storedRecord && storedRecord.pageCount === 15 && storedRecord.userId === testUser.id,
+    'Persistently stores verified upload record server-side bound to userId, fileId, and r2Key'
   );
 
   assert(
@@ -551,13 +691,20 @@ async function testSuccessfulVerification() {
 }
 
 // ─────────────────────────────────────────────────────────────
-// SUITE 5: Downstream Order Creation & Payment Verification
+// SUITE 5: Downstream Order Creation & Checkout Tamper Protection
 // ─────────────────────────────────────────────────────────────
 async function testDownstreamOrderCreation(verifiedFile) {
-  console.log('\n\x1b[1m── 5. Downstream Order Creation & Payment Compatibility ──\x1b[0m');
+  console.log('\n\x1b[1m── 5. Downstream Order Creation & Tamper Protection ──\x1b[0m');
+
+  // 5.1 TAMPER ATTEMPT: Customer submits tampered pageCount: 1 during order creation
+  // Verified file in storage has pageCount: 15. The server MUST enforce 15!
+  const tamperedFilePayload = {
+    ...verifiedFile,
+    pageCount: 1 // Malicious customer attempts to pay for only 1 page instead of 15
+  };
 
   const orderData = {
-    files: [verifiedFile],
+    files: [tamperedFilePayload],
     deliveryLocation: 'Hostel Block B Room 302',
     paymentMethod: 'COD',
     collegeId: 'col_01',
@@ -576,14 +723,42 @@ async function testDownstreamOrderCreation(verifiedFile) {
   );
 
   assert(
-    order.files[0].r2Key === verifiedFile.r2Key,
-    'Order records verified direct-upload r2Key accurately'
+    order.files[0].pageCount === 15,
+    `SECURITY ENFORCEMENT: Server strictly used stored verified pageCount (15) despite customer submitting 1`
   );
 
+  // Single-sided rate = 1.50 per sheet, 15 pages duplex = 8 sheets * 1.50 * 1.0 = 12.00 + convenience fee
   assert(
-    order.pricing && order.pricing.finalPrice > 0,
-    `Order pricing aggregate computed correctly from verified page count: ₹${order.pricing.finalPrice}`
+    order.pricing && order.pricing.finalPrice > 10,
+    `Order pricing aggregate calculated from server-stored 15 pages (finalPrice: ₹${order.pricing.finalPrice})`
   );
+
+  // 5.2 UNVERIFIED FILE REJECTION: Attempt to place an order with an unverified direct-upload r2Key
+  let unverifiedRejected = false;
+  try {
+    await createOrderRecord({
+      user: testUser,
+      orderData: {
+        files: [
+          {
+            id: 'file_unverified_99',
+            name: 'fake.pdf',
+            r2Key: `orders/uploads/${testUser.id}/file_unverified_99_fake.pdf`,
+            pageCount: 5
+          }
+        ],
+        deliveryLocation: 'Hostel Block B',
+        paymentMethod: 'COD'
+      }
+    });
+  } catch (err) {
+    unverifiedRejected = true;
+    assert(
+      err.message.includes('Unverified file upload detected'),
+      'CRITICAL: Rejects order creation containing an unverified direct-upload R2 file'
+    );
+  }
+  assert(unverifiedRejected, 'Unverified R2 direct upload must be rejected during order creation');
 
   return order;
 }
@@ -651,7 +826,7 @@ async function testSafeCleanup(order) {
 // ─────────────────────────────────────────────────────────────
 async function runAll() {
   console.log('\n╔════════════════════════════════════════════════════════════════╗');
-  console.log('║   CopyCraft — Stage 1 Direct Upload & Security Test Suite      ║');
+  console.log('║   CopyCraft — Direct Upload, Token & Tamper Security Suite     ║');
   console.log('╚════════════════════════════════════════════════════════════════╝');
 
   try {
@@ -665,7 +840,7 @@ async function runAll() {
     console.log('\n════════════════════════════════════════════════════════════════');
     console.log(`Results: ${passedTests} / ${totalTests} checks passed`);
     if (passedTests === totalTests) {
-      console.log('\x1b[32m\x1b[1m🎉 ALL STAGE 1 DIRECT UPLOAD TESTS PASSED SUCCESSFULLY!\x1b[0m\n');
+      console.log('\x1b[32m\x1b[1m🎉 ALL STAGE 1 DIRECT UPLOAD & SECURITY TESTS PASSED!\x1b[0m\n');
       process.exit(0);
     } else {
       console.log('\x1b[31m\x1b[1m❌ SOME TESTS FAILED.\x1b[0m\n');

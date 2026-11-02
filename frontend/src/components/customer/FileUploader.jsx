@@ -115,9 +115,22 @@ export default function FileUploader({ onFilesUpdated, files = [] }) {
       }
 
       // Safe Deliberate Fallback: If backend explicitly reports direct upload is not supported
-      // (e.g. Cloudflare R2 is unconfigured in development/memory mode)
       if (presignRes.directUploadSupported === false) {
-        console.warn('Direct R2 upload not configured on backend; using deliberate multipart fallback.');
+        const hasPdf = uploadedFiles.some(f => {
+          const name = (f.name || '').toLowerCase();
+          const type = (f.type || '').toLowerCase();
+          return name.endsWith('.pdf') || type === 'application/pdf';
+        });
+
+        if (hasPdf) {
+          addToast(
+            'Direct cloud storage is currently unavailable. PDF documents require secure direct upload and cannot be uploaded via server fallback.',
+            'error'
+          );
+          return;
+        }
+
+        console.warn('Direct R2 upload not configured on backend; using deliberate multipart fallback for non-PDF documents.');
         setUploadStatusText('Uploading via server storage...');
         setUploadProgress(30);
 
@@ -156,9 +169,12 @@ export default function FileUploader({ onFilesUpdated, files = [] }) {
         if (ext === 'pdf') {
           try {
             const result = await countPdfPages(file);
+            if (!result || !Number.isInteger(result.pageCount) || result.pageCount < 1) {
+              throw new Error(`Failed to extract valid page count for "${file.name}".`);
+            }
             pageCounts.push(result.pageCount);
           } catch (pdfErr) {
-            // Page counting failed — block upload for this batch
+            // Page counting failed — block upload for this batch completely
             addToast(pdfErr.message || `Failed to read "${file.name}". Please check the file.`, 'error');
             return;
           }
@@ -200,7 +216,7 @@ export default function FileUploader({ onFilesUpdated, files = [] }) {
         })
       );
 
-      // Step 4: Backend verification — send page counts along with file descriptors
+      // Step 4: Backend verification — send page counts along with file descriptors and mandatory uploadToken
       setUploadProgress(85);
       setUploadStatusText('Verifying uploaded files on server...');
 
@@ -354,7 +370,7 @@ export default function FileUploader({ onFilesUpdated, files = [] }) {
             />
           </div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-            Direct-to-cloud secure transfer • PDF.js local page counting • Server verified
+            Direct-to-cloud secure transfer • PDF.js local page counting • Server verified upload
           </div>
         </div>
       )}

@@ -112,7 +112,7 @@ export async function closeDatabase() {
 }
 
 async function seedAndSyncCollections(db) {
-  const collections = ['users', 'orders', 'colleges', 'coupons', 'notifications', 'auditLogs', 'supportTickets'];
+  const collections = ['users', 'orders', 'colleges', 'coupons', 'notifications', 'auditLogs', 'supportTickets', 'verifiedUploads'];
 
   for (const collName of collections) {
     const collection = db.collection(collName);
@@ -151,6 +151,10 @@ async function seedAndSyncCollections(db) {
 
   const profilesCol = db.collection('userProfiles');
   await profilesCol.createIndex({ userId: 1 }, { unique: true });
+
+  const verifiedUploadsCol = db.collection('verifiedUploads');
+  await verifiedUploadsCol.createIndex({ userId: 1, fileId: 1, r2Key: 1 }, { unique: true });
+  await verifiedUploadsCol.createIndex({ fileId: 1 });
 
   // 14-Day TTL Index for Audit Logs (automatic database cleanup)
   const auditLogsCol = db.collection('auditLogs');

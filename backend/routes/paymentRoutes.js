@@ -19,6 +19,7 @@ import {
   verifyRazorpaySignature
 } from '../services/razorpayService.js';
 import { calculateOrderAggregateQuote, createOrderRecord } from '../controllers/orderController.js';
+import { getVerifiedUpload } from '../models/verifiedUpload.js';
 
 const router = express.Router();
 
@@ -44,6 +45,7 @@ router.get('/razorpay/config', authenticateToken, (req, res) => {
 /**
  * POST /api/payments/razorpay/create-order
  * Creates an official Razorpay order with amount computed from files & discounts.
+ * Enforces server-stored page counts to prevent checkout tampering.
  */
 router.post('/razorpay/create-order', authenticateToken, async (req, res) => {
   try {
@@ -61,8 +63,35 @@ router.post('/razorpay/create-order', authenticateToken, async (req, res) => {
       });
     }
 
-    // Compute exact backend price breakdown
-    const aggregateQuote = calculateOrderAggregateQuote(files, couponCode, referralDiscount);
+    // Resolve server-stored verified file information (especially pageCount)
+    const resolvedFiles = [];
+    for (const file of files) {
+      const fileId = file.id || file.fileId;
+      const r2Key = file.r2Key;
+      if (r2Key) {
+        const verified = await getVerifiedUpload(req.user.id, fileId, r2Key);
+        if (!verified) {
+          return res.status(400).json({
+            success: false,
+            message: `Unverified file upload detected for "${file.name || fileId}". Direct uploads must be verified before payment.`
+          });
+        }
+        resolvedFiles.push({
+          ...file,
+          pageCount: verified.pageCount,
+          size: verified.fileSize || file.size,
+          mimeType: verified.mimeType || file.mimeType,
+          name: verified.fileName || file.name,
+          r2Key: verified.r2Key,
+          id: fileId
+        });
+      } else {
+        resolvedFiles.push(file);
+      }
+    }
+
+    // Compute exact backend price breakdown using server-verified files
+    const aggregateQuote = calculateOrderAggregateQuote(resolvedFiles, couponCode, referralDiscount);
     const amountInRupees = aggregateQuote.finalPrice;
 
     if (amountInRupees <= 0) {
@@ -141,7 +170,7 @@ router.post('/razorpay/verify', authenticateToken, async (req, res) => {
       });
     }
 
-    // Create the confirmed order in the database
+    // Create the confirmed order in the database (resolves server-stored verified file information)
     const { order, receipt } = await createOrderRecord({
       user: req.user,
       orderData: {

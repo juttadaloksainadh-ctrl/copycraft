@@ -5,6 +5,7 @@ import { isR2Configured, uploadFile, generateFileKey } from '../services/r2Stora
 import { createPaymentReceipt } from '../models/paymentReceipt.js';
 import { db, syncDbToR2 } from '../models/dbStore.js';
 import { isUsingMongo, getMongoCollection } from '../config/db.js';
+import { getVerifiedUpload } from '../models/verifiedUpload.js';
 
 export const getPricingRatesHandler = (req, res) => {
   return res.json({ success: true, pricingRates: getPricingRates() });
@@ -202,8 +203,34 @@ export async function createOrderRecord({ user, orderData, paymentInfo = {} }) {
     )
   ) || db.users.find(u => u.role === 'distributor') || null;
 
-  // Calculate pricing aggregate for all files accurately
-  const aggregateBreakdown = calculateOrderAggregateQuote(files, couponCode, referralDiscount);
+  // Resolve server-stored verified file information (especially pageCount)
+  // to protect against checkout-time frontend pageCount manipulation
+  const resolvedFiles = [];
+  for (const file of files) {
+    const fileId = file.id || file.fileId;
+    const r2Key = file.r2Key;
+    if (r2Key) {
+      const verified = await getVerifiedUpload(user.id, fileId, r2Key);
+      if (!verified) {
+        throw new Error(`Unverified file upload detected for "${file.name || fileId}". Direct uploads must be verified before placing an order.`);
+      }
+      resolvedFiles.push({
+        ...file,
+        pageCount: verified.pageCount,
+        size: verified.fileSize || file.size,
+        mimeType: verified.mimeType || file.mimeType,
+        name: verified.fileName || file.name,
+        r2Key: verified.r2Key,
+        id: fileId
+      });
+    } else {
+      // Legacy multipart or non-R2 file
+      resolvedFiles.push(file);
+    }
+  }
+
+  // Calculate pricing aggregate for all files accurately using verified page counts
+  const aggregateBreakdown = calculateOrderAggregateQuote(resolvedFiles, couponCode, referralDiscount);
 
   const orderId = `ORD-2026-${Math.floor(1000 + Math.random() * 9000)}`;
   const paymentStatus = paymentInfo.paymentStatus || (paymentMethod === 'COD' ? 'PENDING' : 'PAID');
@@ -227,7 +254,7 @@ export async function createOrderRecord({ user, orderData, paymentInfo = {} }) {
     distributorId: distributor ? distributor.id : null,
     distributorName: distributor ? distributor.name : 'Campus Distributor',
     distributorPhone: distributor ? distributor.phone : '',
-    files,
+    files: resolvedFiles,
     pricing: aggregateBreakdown,
     paymentStatus,
     paymentMethod,
@@ -285,7 +312,7 @@ export async function createOrderRecord({ user, orderData, paymentInfo = {} }) {
       razorpayPaymentId: paymentInfo.razorpayPaymentId || null,
       status: paymentStatus,
       receiptData: {
-        items: files.map(f => ({
+        items: resolvedFiles.map(f => ({
           fileName: f.name,
           pageCount: f.pageCount || 1,
           printMode: f.printMode || 'bw',

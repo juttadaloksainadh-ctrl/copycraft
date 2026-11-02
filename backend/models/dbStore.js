@@ -40,7 +40,8 @@ export const db = {
   notifications: [],
   pricingDefaults: null,
   userProfiles: [],
-  paymentReceipts: []
+  paymentReceipts: [],
+  verifiedUploads: []
 };
 
 import { saveDatabaseToR2 } from '../services/r2Storage.js';
@@ -56,6 +57,3 @@ export function syncDbToR2() {
     saveDatabaseToR2(db).catch(err => console.error('R2 sync failed:', err.message));
   }, 300);
 }
-
-
-

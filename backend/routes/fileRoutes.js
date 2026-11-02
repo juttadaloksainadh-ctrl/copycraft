@@ -15,6 +15,7 @@ import {
   getR2Url
 } from '../services/r2Storage.js';
 import { db } from '../models/dbStore.js';
+import { saveVerifiedUpload } from '../models/verifiedUpload.js';
 
 const router = express.Router();
 
@@ -131,7 +132,7 @@ export const presignUploadHandler = async (req, res) => {
         originalName: rawName
       }, 900);
 
-      // Issue signed upload token binding user, fileId, key, and filename
+      // Issue signed upload token binding user, fileId, key, filename, and mimeType
       const uploadToken = generateToken({
         userId,
         fileId,
@@ -169,11 +170,12 @@ export const presignUploadHandler = async (req, res) => {
 /**
  * POST /api/files/verify-upload
  * Verify completed direct uploads to R2:
- * 1. Validates user-file binding to prevent object key forgery
- * 2. Verifies actual file size in R2 against 50MB limit
- * 3. Accepts frontend-extracted PDF page count (PDF.js) with size-based plausibility check
- * 4. Runs AI analysis
- * 5. Returns canonical file objects compatible with order creation
+ * 1. Validates mandatory uploadToken binding all 5 identity fields
+ * 2. Validates user-file binding to prevent object key forgery
+ * 3. Verifies actual file size in R2 against 50MB limit via HeadObjectCommand
+ * 4. Accepts frontend-extracted PDF page count (PDF.js) with size-based plausibility check
+ * 5. Stores verified upload record server-side to protect pageCount from checkout tampering
+ * 6. Runs AI analysis and returns canonical file objects
  */
 export const verifyUploadHandler = async (req, res) => {
   try {
@@ -227,15 +229,52 @@ export const verifyUploadHandler = async (req, res) => {
         });
       }
 
-      // Security Check 3: Cryptographic upload token verification if provided
-      if (uploadToken) {
-        const decoded = verifyToken(uploadToken);
-        if (!decoded || decoded.userId !== userId || decoded.fileId !== fileId || decoded.r2Key !== r2Key) {
-          return res.status(403).json({
-            success: false,
-            message: `Upload token validation failed: token is expired, forged, or mismatched.`
-          });
-        }
+      // Security Check 3: Mandatory Cryptographic uploadToken verification
+      if (!uploadToken || typeof uploadToken !== 'string' || !uploadToken.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: `Upload token is required for file "${rawName}". Direct upload verification rejected.`
+        });
+      }
+
+      const decoded = verifyToken(uploadToken);
+      if (!decoded) {
+        return res.status(403).json({
+          success: false,
+          message: `Upload token validation failed: token is expired, invalid, or forged.`
+        });
+      }
+
+      // Resolve submitted MIME type (align with presignUploadHandler logic)
+      const ext = rawName.split('.').pop().toLowerCase();
+      let mimeType = String(file.mimeType || file.type || '').toLowerCase();
+      if (!mimeType || !ALLOWED_MIME_TYPES.has(mimeType)) {
+        const mimeMap = {
+          pdf: 'application/pdf',
+          doc: 'application/msword',
+          docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          ppt: 'application/vnd.ms-powerpoint',
+          pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+          jpg: 'image/jpeg',
+          jpeg: 'image/jpeg',
+          png: 'image/png',
+          webp: 'image/webp'
+        };
+        mimeType = mimeMap[ext] || 'application/octet-stream';
+      }
+
+      // Validate all required identity fields in the token
+      if (
+        decoded.userId !== userId ||
+        decoded.fileId !== fileId ||
+        decoded.r2Key !== r2Key ||
+        decoded.fileName !== rawName ||
+        (decoded.mimeType && decoded.mimeType.toLowerCase() !== mimeType)
+      ) {
+        return res.status(403).json({
+          success: false,
+          message: `Upload token validation failed: token identity parameters do not match submitted file descriptors.`
+        });
       }
 
       // Security Check 4: Inspect actual object metadata in R2 via HeadObjectCommand
@@ -286,8 +325,6 @@ export const verifyUploadHandler = async (req, res) => {
       }
 
       // Process page count — accept frontend-supplied pageCount (PDF.js extracted)
-      const ext = rawName.split('.').pop().toLowerCase();
-      const mimeType = file.mimeType || objectMeta.contentType || 'application/octet-stream';
       let pageCount = 1;
       const clientPageCount = Number(file.pageCount);
 
@@ -300,7 +337,7 @@ export const verifyUploadHandler = async (req, res) => {
           });
         }
 
-        // Security heuristic: a single PDF page is rarely < 200 bytes
+        // Basic sanity check: a single PDF page is rarely < 200 bytes
         const maxReasonablePages = Math.floor(actualSize / 200);
         if (clientPageCount > maxReasonablePages) {
           return res.status(400).json({
@@ -316,6 +353,17 @@ export const verifyUploadHandler = async (req, res) => {
         // DOCX, PPTX — use client-provided count if valid, else default to 1
         pageCount = (Number.isInteger(clientPageCount) && clientPageCount >= 1) ? clientPageCount : 1;
       }
+
+      // Store verified upload record server-side to protect pageCount from checkout manipulation
+      await saveVerifiedUpload({
+        userId,
+        fileId,
+        r2Key,
+        fileName: rawName,
+        fileSize: actualSize,
+        mimeType,
+        pageCount
+      });
 
       // AI Document Intelligence Analysis
       const aiAnalysis = analyzeDocumentAI(rawName, actualSize, pageCount);
@@ -340,7 +388,7 @@ export const verifyUploadHandler = async (req, res) => {
 
     return res.json({
       success: true,
-      message: 'Direct upload files verified and analyzed successfully',
+      message: 'Direct upload files verified and recorded successfully',
       files: processedFiles,
       storageMode: 'cloudflare_r2'
     });
